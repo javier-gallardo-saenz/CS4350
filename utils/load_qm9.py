@@ -4,7 +4,7 @@ import torch
 import random
 
 # Load QM9 dataset
-path = './qm9'
+path = '../qm9'
 dataset = QM9(path)
 
 # Shuffle dataset indices with a fixed seed for reproducibility
