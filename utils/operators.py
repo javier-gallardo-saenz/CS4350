@@ -1,58 +1,38 @@
+import torch
 import numpy as np
 
-def laplacian_standard(adj):
-    degrees = np.sum(adj, axis=1)
-    D = np.diag(degrees)
-    return D - adj
-
-def laplacian_hubs_repelling(adj):
-    degrees = np.sum(adj, axis=1)
-    safe_degrees = np.where(degrees == 0, 1, degrees)
+def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
+    assert A.dim() == 2 and A.shape[0] == A.shape[1], "Adjacency matrix must be square"
+    A = A.float()
     
-    scaling = (degrees[:, None] / safe_degrees[None, :]) * (adj > 0)
-    diag_entries = np.sum(scaling, axis=1)
-    
-    Eps_A = np.diag(diag_entries)
-    D = np.diag(degrees)
-    D_inv = np.diag(1 / safe_degrees)
-    
-    return Eps_A - D @ adj @ D_inv
+    # degree vector
+    deg = A.sum(dim=1)
 
-def laplacian_hubs_attracting(adj):
-    degrees = np.sum(adj, axis=1)
-    safe_degrees = np.where(degrees == 0, 1, degrees)
+    if (deg == 0).any():
+        raise ValueError("Graph has disconnected components (nodes with degree 0)")
 
-    scaling = (safe_degrees[None, :] / degrees[:, None]) * (adj > 0)
-    diag_entries = np.sum(scaling, axis=1)
+    # D^alpha and D^-alpha
+    D_alpha = torch.diag(deg.pow(alpha))
+    D_neg_alpha = torch.diag(deg.pow(-alpha))
 
-    Eps_R = np.diag(diag_entries)
-    D = np.diag(degrees)
-    D_inv = np.diag(1 / safe_degrees)
+    # Compute Ξ_α: diag( sum_{w in N(v)} (d_w/d_v)^α )
+    deg_matrix_ratio = deg.view(1, -1) / deg.view(-1, 1)  # shape: (N, N)
+    deg_ratio_pow = deg_matrix_ratio.pow(alpha) * A  # keep only neighbors
+    Xi_alpha = torch.diag(deg_ratio_pow.sum(dim=1))
 
-    return Eps_R - D_inv @ adj @ D
+    L_alpha = Xi_alpha - D_neg_alpha @ A @ D_alpha
 
-def compute_laplacian(adj, alpha=0):
-    """
-    Dispatch to one of the Laplacian variants based on alpha.
-    """
-    if alpha == 0:
-        return laplacian_standard(adj)
-    elif alpha == 1:
-        return laplacian_hubs_repelling(adj)
-    elif alpha == -1:
-        return laplacian_hubs_attracting(adj)
-    else:
-        raise ValueError("alpha must be -1, 0, or 1")
+    return L_alpha
 
-#adj = np.array([[0, 1, 0, 0],[1, 0, 1, 0],[0, 1, 0, 1],[0, 0, 1, 0]])
 adj = np.array([[0, 1, 1, 1],
                 [1, 0, 1, 0],
                 [1, 1, 0, 0],
-                [1, 0, 0, 0]])              
-
-L_R = compute_laplacian(adj,1)
-L_A = compute_laplacian(adj,-1)
-L = compute_laplacian(adj,0)
+                [1, 0, 0, 0]])  
+ 
+adj = torch.tensor(adj)
+L_R = hub_laplacian(adj,1)
+L_A = hub_laplacian(adj,-1)
+L = hub_laplacian(adj,0)
 
 print("Hubs-attracting Laplacian matrix L_A:")
 print(L_A)
