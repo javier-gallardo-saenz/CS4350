@@ -5,9 +5,6 @@ from torch import Tensor
 from torch_geometric.utils import to_dense_adj, dense_to_sparse
 from torch_geometric.data import Data
 from typing import List, Tuple, Dict, Any, Callable
-from operators import hub_advection_diffusion, hub_laplacian
-
-
 
 def compute_spectral_features(
     adj: Tensor,
