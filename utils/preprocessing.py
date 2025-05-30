@@ -7,6 +7,7 @@ from torch_geometric.data import Data
 from typing import List, Tuple, Dict, Any
 from operators import hub_advection_diffusion
 
+
 def compute_spectral_features(
     adj: Tensor,
     num_nodes: int,
@@ -94,6 +95,7 @@ def process_single_graph(
     d.update(F_norm_edge=F_edge, F_dig=F_deg)
 
     return d
+
 
 def preprocessing_dataset(
     dataset: List[Data],
