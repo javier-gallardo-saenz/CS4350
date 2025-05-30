@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
     assert A.dim() == 2 and A.shape[0] == A.shape[1], "Adjacency matrix must be square"
@@ -24,21 +23,9 @@ def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
 
     return L_alpha
 
-adj = np.array([[0, 1, 1, 1],
-                [1, 0, 1, 0],
-                [1, 1, 0, 0],
-                [1, 0, 0, 0]])  
- 
-adj = torch.tensor(adj)
-L_R = hub_laplacian(adj,1)
-L_A = hub_laplacian(adj,-1)
-L = hub_laplacian(adj,0)
-
-print("Hubs-attracting Laplacian matrix L_A:")
-print(L_A)
-
-print("Laplacian matrix L")
-print(L)
-
-print("Hubs-repelling Laplacian matrix L_R:")
-print(L_R)
+def hub_advection_diffusion(A: torch.Tensor,
+                            alpha: float,
+                            gamma_diff: float,
+                            gamma_adv: float) -> torch.Tensor:
+    
+    return gamma_adv * hub_laplacian(A, alpha) + gamma_diff * hub_laplacian(A, alpha=0)
