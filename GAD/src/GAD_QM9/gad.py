@@ -12,7 +12,9 @@ from dgn_layer import DGN_layer_Simple, DGN_Tower, DGN_layer_Tower
 from gad_layer import GAD_layer
 
 class GAD(nn.Module):
-    def __init__(self, num_of_node_fts, num_of_edge_fts, hid_dim, atomic_emb, graph_norm, batch_norm, dropout, readout, aggregators, scalers, edge_fts, avg_d, D, device, towers, type_net, residual, use_diffusion, diffusion_method, k, n_layers):
+    def __init__(self, num_of_node_fts, num_of_edge_fts, hid_dim, atomic_emb, graph_norm, batch_norm, dropout, readout,
+                 aggregators, scalers, edge_fts, avg_d, D, device, towers, type_net, residual,
+                 use_diffusion, diffusion_type, diffusion_method, k, n_layers):
         super().__init__()
         
         self.hidden_dim    = hid_dim
@@ -46,18 +48,22 @@ class GAD(nn.Module):
         self.layer_last  = nn.Linear(self.hidden_dim + self.atomic_emb, self.hidden_dim + self.atomic_emb)
         
         
-        self.layers = nn.ModuleList([GAD_layer(hid_dim = self.hidden_dim + self.atomic_emb, graph_norm = self.graph_norm, batch_norm = self.batch_norm, 
-                                    dropout = dropout, aggregators = self.aggregators, scalers = self.scalers, edge_fts = self.edge_fts, 
-                                    avg_d = self.avg_d, D = D, device= self.device, towers=towers, type_net = self.type_net, 
-                                    residual = self.residual, use_diffusion = use_diffusion, 
-                                                        diffusion_method = diffusion_method, k =k) for _ in range(self.n_layers)])
+        self.layers = nn.ModuleList([GAD_layer(hid_dim=self.hidden_dim + self.atomic_emb, graph_norm=self.graph_norm,
+                                               batch_norm=self.batch_norm, dropout=dropout,
+                                               aggregators=self.aggregators, scalers=self.scalers,
+                                               edge_fts=self.edge_fts, avg_d=self.avg_d, D=D, device=self.device,
+                                               towers=towers, type_net=self.type_net, residual=self.residual,
+                                               use_diffusion=use_diffusion, diffusion_type=diffusion_type,
+                                               diffusion_method=diffusion_method, k=k) for _ in range(self.n_layers)])
         
 
-        self.readout_MLP = MLP([ self.hidden_dim + self.atomic_emb, (self.hidden_dim + self.atomic_emb)//2,  1], dropout = False)
+        self.readout_MLP = MLP([self.hidden_dim + self.atomic_emb, (self.hidden_dim + self.atomic_emb)//2,  1],
+                               dropout=False)
 
 
 
-    def forward(self, node_fts, automic_num, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx):
+    def forward(self, node_fts, automic_num, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat,
+                lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx):
       
 
         if self.edge_fts:
@@ -71,11 +77,12 @@ class GAD(nn.Module):
         
         
         for i, conv in enumerate(self.layers):
-            new_node_fts = conv(node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
+            new_node_fts = conv(node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat,
+                                k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
             node_fts = new_node_fts
 
             
-        output  = self.layer_last(node_fts)
+        output = self.layer_last(node_fts)
 
         output = scatter(output, batch_idx, dim=0, reduce= self.readout)
 
