@@ -7,6 +7,9 @@ def hub_laplacian(A: np.ndarray, alpha: float) -> np.ndarray:
     # degree vector
     deg = A.sum(axis=1)
 
+    if alpha ==0:
+        return np.diag(deg) - A
+
     if np.any(deg == 0):
         raise ValueError("Graph has disconnected components (nodes with degree 0)")
 
