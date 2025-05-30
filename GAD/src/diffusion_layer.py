@@ -141,10 +141,48 @@ class Diffusion_layer_DegOperators(nn.Module):
         return x_diffuse
 
 
-
 #----------------------------------------------------------------------------------------------------
 # Diffusion Layer for Hub Laplacian (d/dt X = L_{\alhpa} X)
 #                     /Adv-Diff Operator (d/dt X = (\gamma_{a} L^{*}_{\alpha} + \gamma_{d} L) X )
 # with LEARNABLE \gamma_{d}, \gamma_{a}, \alpha
 #----------------------------------------------------------------------------------------------------
 
+class Diffusion_layer_LearnableDegOperators(nn.Module):
+
+    def __init__(self, width, method, k, device):
+        super().__init__()
+
+        self.width = width
+        self.method = method
+        self.k = k
+        self.device = device
+        self.relu = nn.LeakyReLU()
+
+        self.diffusion_time = nn.Parameter(torch.Tensor(self.width))  # num_channels
+        self.gamma = nn.Parameter(torch.Tensor(self.width))
+
+        nn.init.constant_(self.diffusion_time, 0.0)
+
+    def forward(self, node_fts, node_deg_vec, node_deg_mat, operator, k_eig_val, k_eig_vec, num_nodes, batch_idx):
+
+        with torch.no_grad():
+
+            self.diffusion_time.data = torch.clamp(self.diffusion_time, min=1e-8)
+
+        mat_ = operator.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
+
+        mat_ *= self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
+
+        cholesky_factors = torch.linalg.cholesky(mat_)
+
+        cholesky_decomp = node_fts
+
+        cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
+
+        final_sol = torch.cholesky_solve(cholesky_decomp_T, cholesky_factors)
+
+        x_diffuse = torch.transpose(final_sol.squeeze(-1), 0, 1)
+
+        x_diffuse = self.relu(x_diffuse)
+
+        return x_diffuse
