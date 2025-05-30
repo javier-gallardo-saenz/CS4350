@@ -8,6 +8,7 @@ from typing import List, Tuple, Dict, Any, Callable
 from operators import hub_advection_diffusion, hub_laplacian
 
 
+
 def compute_spectral_features(
     adj: Tensor,
     num_nodes: int,

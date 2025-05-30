@@ -159,9 +159,9 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
         self.relu = nn.LeakyReLU()
 
         self.diffusion_time = nn.Parameter(torch.Tensor(self.width))  # num_channels
-        self.gamma_adv = nn.Parameter(torch.Tensor(self.width))
-        self.gamma_diff = nn.Parameter(torch.Tensor(self.width))
-        self.alpha = nn.Parameter(torch.Tensor(self.width))
+        self.gamma_adv = nn.Parameter(torch.Tensor(1))
+        self.gamma_diff = nn.Parameter(torch.Tensor(1))
+        self.alpha = nn.Parameter(torch.Tensor(1))
 
         nn.init.constant_(self.diffusion_time, 0.0)
 
@@ -171,7 +171,7 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
 
             self.diffusion_time.data = torch.clamp(self.diffusion_time, min=1e-8)
 
-        mat_ = operator.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
+        mat_ = operator(self.gamma_adv, self.gamma_diff, self.alpha).unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
 
         mat_ *= self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
 
