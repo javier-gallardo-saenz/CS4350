@@ -56,7 +56,7 @@ def evaluate_network(model, data_loader, device):
     return epoch_test_mae
 
 
-def train_epoch(model ,data_loader, optimizer, device, loss_fn):
+def train_epoch(model, data_loader, optimizer, device, loss_fn):
     
         epoch_train_mae = 0
 
