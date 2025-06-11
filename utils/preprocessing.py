@@ -7,42 +7,57 @@ from torch_geometric.data import Data
 from typing import List, Tuple, Dict, Any, Callable
 
 def compute_spectral_features(
-    adj: Tensor,
+    adj: torch.Tensor,
     num_nodes: int,
     k: int,
     laplacian_fn: Callable[..., np.ndarray],
     **kwargs: Any
-) -> Tuple[Tensor, Tensor, Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    1) Build Laplacian L using the provided laplacian_fn
-    2) Eigendecompose & sort
-    3) Extract 2nd-smallest eigenvector + top-k, with padding
+    Compute spectral features using a provided Laplacian function.
+    Selects the first non-trivial eigenvector, and returns top-k eigenvectors and values.
     """
     A = adj.cpu().numpy()
-    L = laplacian_fn(A, **kwargs)  # Use the provided function and its kwargs
+    L = laplacian_fn(A, **kwargs)
 
-    # compute and sort eigenvals and eigenvs
+    # compute eigen-decomposition
     vals, vecs = scipy.linalg.eig(L)
-    vals[np.abs(vals) < 1e-8] = 0
-    vecs[np.abs(vals) < 1e-8] = 0
-    idx = np.argsort(vals)
-    vals, vecs = vals[idx], vecs[:, idx]
+    vals = np.real(vals)
+    vecs = np.real(vecs)
 
-    # pick lowest non trivial eigenvec
-    i_low = 1 if len(vals) > 1 else 0
+    # sort by eigenvalue magnitude
+    idx = np.argsort(vals)
+    vals = vals[idx]
+    vecs = vecs[:, idx]
+
+    # remove (near-)zero eigenvalues (trivial modes)
+    tol = 1e-6
+    non_trivial_indices = np.where(np.abs(vals) > tol)[0]
+
+    if len(non_trivial_indices) == 0:
+        print("Warning: No non-trivial eigenvalues found.")
+        i_low = 0
+    else:
+        i_low = non_trivial_indices[0]
+
+    # select the first non-trivial eigenvector
     lowest = torch.from_numpy(vecs[:, i_low]).float()
 
-    # convert to torch and pad if nodes < # eigenvecs
-    eig_vecs = torch.from_numpy(vecs[:, :k]).float()
-    eig_vals = torch.from_numpy(vals[:k]).float()
-    if num_nodes < k:
-        pad_v = torch.zeros(num_nodes, k - num_nodes).clamp(min=1e-8)
-        pad_l = torch.zeros(k - num_nodes).clamp(min=1e-8)
-        eig_vecs = torch.cat([eig_vecs, pad_v], dim=1)
-        eig_vals = torch.cat([eig_vals, pad_l], dim=0)
+    # get top-k eigenvectors and eigenvalues 
+    eig_vals = vals[:k]
+    eig_vecs = vecs[:, :k]
 
-    # return lowest, eigenvectors and eigenvalues
+    eig_vals = torch.from_numpy(eig_vals).float()
+    eig_vecs = torch.from_numpy(eig_vecs).float()
+
+    # pad if needed
+    if eig_vecs.shape[1] < k:
+        pad_dim = k - eig_vecs.shape[1]
+        eig_vecs = torch.cat([eig_vecs, torch.zeros(num_nodes, pad_dim)], dim=1)
+        eig_vals = torch.cat([eig_vals, torch.zeros(pad_dim)], dim=0)
+
     return lowest, eig_vecs, eig_vals
+
 
 
 def compute_flowmat(adj: Tensor, lowest: Tensor) -> Tuple[Tensor, Tensor]:
