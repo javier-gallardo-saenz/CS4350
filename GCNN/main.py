@@ -1,37 +1,28 @@
 #main.py
 import torch 
-from torch.nn import Tanh
+from torch.nn import Tanh, ReLU
 from utils.operators import hub_laplacian, adv_diff
-from gcnn_train import train
-
-PARAMS ={
-    "lr": 1e-4,
-    "min_lr": 1e-5,
-    "num_epochs": 1000,
-    "weight_decay" : 0., 
-    "dims" : [64, 64, 64, 1 ] , #first dimension is the batch size 
-    "degrees": [1]* 2,
-    "act_fns": [Tanh]* 2,
-    "weight_decay": 0.4,
-}
-
+from gcnn_train import run_experiment
+from torch_geometric.nn import global_mean_pool
 
 if __name__ == "__main__":
-
+    # Example params for a single run
     PARAMS = {
-        "lr": 1e-3,
-        "min_lr": 1e-5,
-        "num_epochs": 300,
+        "N": 10000, #number of molecules to use
+        "targets" : [0, 1, 2], 
+        "batch_size":   64,
+        "lr":           1e-3,
         "weight_decay": 1e-5,
-        "dims": [11, 128, 128,  1],  # assuming 11 input features in QM9
-        "degrees": [1, 1],  # polynomial degrees per layer
-        "act_fns": [torch.nn.Tanh(), torch.nn.Tanh()],
-        "readout_dims": [128, 64, 1],  # readout MLP layers
-        "gso_generator": adv_diff
-    }
-    # train the model
-    model, best_val_loss, test_loss = train(PARAMS)
+        "num_epochs":   200,
+        "dims":         [11, 64, 64],        #  THIS DOES NOT INCLUDE OUTPUT. OUTPUT SIZE SET BY len(targets)
 
-    # save the trained model
-    torch.save(model.state_dict(), "model.pth")
-    print(f"Training finished! Best Val Loss: {best_val_loss:.4f}, Test Loss: {test_loss:.4f}")
+        "degrees":      [1]* 2,                 # must be = to number of hidden layer
+        "act_fns":      [ReLU()]* 2,            # must be = to number of hidden layer
+        "alpha":        0.5,                    # alpha to initialize GSO
+        "readout_dims": [128, 3],               # first dimension must match last of the hidden layer
+        "apply_pooling":  True,                 
+        "apply_readout": True,                  # if you set false make 
+        "gso_generator": adv_diff,
+        "pooling_fn": global_mean_pool,
+    }
+    run_experiment(PARAMS)
