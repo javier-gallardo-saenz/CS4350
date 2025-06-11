@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch 
-from operators import hub_laplacian
+from utils.operatorsNP import hub_laplacian
 from preprocessing import compute_spectral_features, compute_flowmat
 import networkx as nx
 import numpy as np

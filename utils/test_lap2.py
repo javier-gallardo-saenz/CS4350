@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import networkx as nx
 from preprocessing import compute_spectral_features
-from operators import hub_laplacian
+from utils.operatorsNP import hub_laplacian
 
 # SBM parameters
 sizes = [5, 5]
