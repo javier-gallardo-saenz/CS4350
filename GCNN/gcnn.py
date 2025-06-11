@@ -31,12 +31,21 @@ class GeneralPolyGNN(nn.Module):
             self.readout = None
 
     def forward(self, X, batch, A):
+        """
+        base_operator: the initial graph structure (could be Laplacian, adjacency, etc.)
+        """
+        S = self.gso_generator(A)  # Generate current graph shift operator (differentiable)
+
         x = X
-        for layer in self.layers:
-            x = layer(x)
+        for conv_layer, degree, activation in self.layers:
+            filter_list = create_filter_list(S, degree)  # Create polynomial filters based on current S
+            conv_layer.filters = filter_list  # Dynamically set filters
+            x = conv_layer(x)
+            if activation is not None:
+                x = activation(x)
 
         x = self.pooling(x, batch)
 
-        if self.readout:
-            x = self.readout(x).squeeze(-1)
+        if self.readout is not None:
+            return self.readout(x).squeeze(-1)
         return x
