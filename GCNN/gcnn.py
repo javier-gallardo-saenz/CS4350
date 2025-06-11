@@ -1,15 +1,37 @@
 from filters import create_filter_list
-from torch_geometric.utils import to_dense_adj 
-import torch.nn as nn
-from conv_layer import ConvLayer
-import os
-import torch 
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'GAD', 'src')))
 from mlp import MLP
 
-class GeneralPolyGNN(nn.Module):
+from torch_geometric.utils import to_dense_adj 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class ConvLayer(nn.Module):
+    def __init__(self, in_channels, out_channels, filter_list, activation=None):
+        super().__init__()
+
+        self.K = len(filter_list) - 1
+        self.filters = filter_list
+        self.activation = activation
+
+        self.weights = nn.ParameterList([
+            nn.Parameter(torch.randn(in_channels, out_channels) * (2 / (in_channels + out_channels))**0.5)
+            for _ in range(self.K + 1)
+        ])
+
+    def forward(self, X):
+        N, _ = X.shape
+        out = torch.zeros(N, self.weights[0].size(1), device=X.device)
+
+        for k, Lk in enumerate(self.filters):
+            out += Lk @ X @ self.weights[k]
+
+        if self.activation is not None:
+            out = self.activation(out)
+
+        return out
+
+class GCNNalpha(nn.Module):
     def __init__(self, dims: list, degrees: list, activations: list,
                   gso_generator: nn.Module, readout_dims=None):
         super().__init__()
@@ -47,13 +69,12 @@ class GeneralPolyGNN(nn.Module):
             S_i = self.gso_generator(A_i) 
             gsos.append(S_i)
         
-        # sparse block diagonal matrix
+        # block diagonal matrix (we should sparify later)
         S = torch.block_diag(*gsos)
         x = X
 
         for conv_layer, degree, activation in self.layers:
-            filter_list = create_filter_list(S, degree)  # Create polynomial filters based on current S
-            conv_layer.filters = filter_list  # Dynamically set filters
+            conv_layer.filters = create_filter_list(S, degree)  # create poly filters based on current S
             x = conv_layer(x)
             if activation is not None:
                 x = activation(x)
