@@ -15,7 +15,7 @@ def plot_eigvecs(plotting=True, n_eigs = 10):
     # Compute adjacency and Laplacian matrices
     A = nx.adjacency_matrix(G, weight='weight')
     #L = nx.laplacian_matrix(G, weight='weight')
-    Lh = hub_laplacian(A, alpha=1.0)
+    Lh = hub_laplacian(A, alpha=0.5)
 
     # Compute Fiedler vector
     eigvals, eigvecs = eig(Lh)

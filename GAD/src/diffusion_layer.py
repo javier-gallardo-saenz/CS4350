@@ -129,7 +129,7 @@ class Diffusion_layer_DegOperators(nn.Module):
 
         cholesky_factors = torch.linalg.cholesky(mat_)
 
-        cholesky_decomp = node_fts
+        cholesky_decomp = node_fts * node_deg_vec
 
         cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
 
@@ -185,7 +185,7 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
 
         cholesky_factors = torch.linalg.cholesky(mat_)
 
-        cholesky_decomp = node_fts
+        cholesky_decomp = node_fts * node_deg_vec
 
         cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
 

@@ -114,7 +114,7 @@ def main():
     print("data preprocessing: calculate and store the vector field F, etc.")
 
     D, avg_d = average_node_degree(dataset_train)
-    dataset_train = preprocessing_dataset(dataset_train, args.k)
+    dataset_train = preprocesssing_dataset(dataset_train, args.k)
     dataset_val = preprocessing_dataset(dataset_val, args.k)
     dataset_test = preprocessing_dataset(dataset_test, args.k)
     
