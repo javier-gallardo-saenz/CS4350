@@ -1,16 +1,17 @@
 from filters import create_filter_list
 from mlp import MLP
 
-from torch_geometric.utils import to_dense_adj 
+from torch_geometric.utils import to_dense_adj
 import torch
 import torch.nn as nn
+from torch.nn import ReLU # Assuming ReLU is the activation used in params
 
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, filter_list, activation=None):
         super().__init__()
 
         self.K = len(filter_list) - 1
-        self.filters = filter_list
+        self.filters = filter_list # This will be updated in forward pass of GCNNalpha
         self.activation = activation
 
         self.bias = nn.Parameter(torch.zeros(out_channels))
@@ -43,7 +44,7 @@ class GCNNalpha(nn.Module):
         dims: list,
         output_dim: int,
         degrees: list,
-        activations: list,
+        activations: list, # Changed to list to hold activation functions for each layer
         gso_generator: callable,
         alpha: float = 0.5,
         pooling_fn=None,
@@ -62,14 +63,21 @@ class GCNNalpha(nn.Module):
 
         # layers
         self.layers = nn.ModuleList()
+        # Store degrees and activations separately since they are not nn.Module
+        self.layer_degrees = []
+
         for i in range(len(dims) - 1):
             in_dim = dims[i]
             out_dim = dims[i + 1]
             degree = degrees[i]
-            conv_layer = ConvLayer(in_dim, out_dim, [torch.eye(1)] * (degree + 1))
-            self.layers.append((conv_layer, degree, activations[i]))
+            activation_fn = activations[i] # Get the specific activation for this layer
 
-        # readout MLP 
+            # Pass activation to ConvLayer so it handles it internally
+            conv_layer = ConvLayer(in_dim, out_dim, [torch.eye(1)] * (degree + 1), activation=activation_fn)
+            self.layers.append(conv_layer)
+            self.layer_degrees.append(degree)
+
+        # readout MLP
         if readout_dims is not None:
             self.readout = MLP([dims[-1]] + readout_dims)
         else:
@@ -87,15 +95,15 @@ class GCNNalpha(nn.Module):
             A_i = A_i[:num_nodes_i, :num_nodes_i]
             S_i = self.gso_generator(A_i, self.alpha)
             gsos.append(S_i)
+
         S = torch.block_diag(*gsos)
 
         x = X
-        for conv_layer, degree, activation in self.layers:
+        for i, conv_layer in enumerate(self.layers):
+            degree = self.layer_degrees[i]
             filters = create_filter_list(S, degree)
             conv_layer.filters = filters
             x = conv_layer(x)
-            if activation is not None:
-                x = activation(x)
 
         if self.apply_pooling:
             if self.pooling_fn is not None:

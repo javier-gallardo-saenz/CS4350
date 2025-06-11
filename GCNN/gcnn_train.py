@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
+
 from gcnn import GCNNalpha
 from data import get_data_loaders
 
@@ -10,7 +11,7 @@ from data import get_data_loaders
 def train_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
     total, count = 0.0, 0
-    for batch in tqdm(loader, desc='Train'):
+    for batch in loader:
         batch = batch.to(device)
         optimizer.zero_grad()
         out   = model(batch.x, batch.batch, batch.edge_index)
@@ -28,7 +29,7 @@ def eval_epoch(model, data_loader, params, device, tag='Val'):
     total_samples = 0
 
     with torch.no_grad():
-        for data in tqdm(data_loader, desc=tag):
+        for data in data_loader:
             x = data.x.to(device)
             batch = data.batch.to(device)
             edge_index = data.edge_index.to(device)
@@ -47,7 +48,7 @@ def eval_epoch(model, data_loader, params, device, tag='Val'):
 
     per_target_mae = (total_errors / total_samples).cpu().numpy()
 
-    print(f"{tag} MAE per target: {per_target_mae}")
+    #print(f"{tag} MAE per target: {per_target_mae}")
     return per_target_mae
 
 
@@ -85,7 +86,7 @@ def run_experiment(params):
     val_mean_mae_history = []
     val_per_target_mae_history = [] # New list to store per-target MAE
 
-    for epoch in range(1, params["num_epochs"] + 1):
+    for epoch in tqdm(range(1, params["num_epochs"] + 1)):
         train_mae = train_epoch(model, train_loader, optimizer, loss_fn, device)
         val_per_target_mae = eval_epoch(model, val_loader, params, device, tag='Val') # Get per-target MAE
         val_mean_mae = val_per_target_mae.mean() # Calculate mean for scheduling
@@ -100,9 +101,10 @@ def run_experiment(params):
             best_val_mean_mae = val_mean_mae
             best_state = model.state_dict()
 
-        if epoch % 100 == 0 or epoch == params["num_epochs"]:
+        if epoch % 10 == 0 or epoch == params["num_epochs"]:
             print(f"Epoch {epoch}/{params['num_epochs']} | Train MAE: {train_mae:.4f} | Val MAE (mean): {val_mean_mae:.4f} | Val MAE (per target): {val_per_target_mae}")
-
+            print(f"Alpha: {model.alpha.item()}")
+            
     # test
     model.load_state_dict(best_state)
     test_per_target_mae = eval_epoch(model, test_loader, params, device, tag='Test') # Pass params here
