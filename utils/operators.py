@@ -1,31 +1,36 @@
 import torch
+from torch_geometric.utils import get_laplacian
 
-def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
-    assert A.dim() == 2 and A.shape[0] == A.shape[1], "Adjacency matrix must be square"
-    A = A.float()
+def batched_hub_laplacian(A: torch.Tensor, alpha: float) -> torch.tensor:
+    #assume that A is tensor [B, N, N]
+    deg = A.sum(dim=2) # [B, N]
+
+    if alpha ==0:
+        D = torch.diag_embed(deg)
+        return D - A
     
-    # degree vector
-    deg = A.sum(dim=1)
+    D_alpha = torch.diag_embed(deg.pow(alpha)) #[B, N, N]
+    D_neg_alpha = torch.diag_embed(deg.pow(-alpha))
 
-    if (deg == 0).any():
-        raise ValueError("Graph has disconnected components (nodes with degree 0)")
+    # compute Ξ_α: diag( sum_{w in N(v)} (d_w/d_v)^α )
+    deg_i = deg.unsqueeze(2)  # [B, N, 1]
+    deg_j = deg.unsqueeze(1)  # [B, 1, N]
 
-    # D^alpha and D^-alpha
-    D_alpha = torch.diag(deg.pow(alpha))
-    D_neg_alpha = torch.diag(deg.pow(-alpha))
+    ratio = (deg_j / deg_i).pow(alpha)
 
-    # Compute Ξ_α: diag( sum_{w in N(v)} (d_w/d_v)^α )
-    deg_matrix_ratio = deg.view(1, -1) / deg.view(-1, 1)  # shape: (N, N)
-    deg_ratio_pow = deg_matrix_ratio.pow(alpha) * A  # keep only neighbors
-    Xi_alpha = torch.diag(deg_ratio_pow.sum(dim=1))
-
-    L_alpha = Xi_alpha - D_neg_alpha @ A @ D_alpha
-
-    return L_alpha
-
-def hub_advection_diffusion(A: torch.Tensor,
-                            alpha: float,
-                            gamma_diff: float,
-                            gamma_adv: float) -> torch.Tensor:
+    # mask out non-edges:
+    deg_ratio_pow = ratio * A      # [B,N,N]
     
-    return gamma_adv * hub_laplacian(A, alpha) + gamma_diff * hub_laplacian(A, alpha=0)
+    # sum over neighbors:
+    Xi = torch.diag_embed(deg_ratio_pow.sum(dim=2)) #[B, N, N]
+
+    S = Xi - D_neg_alpha @ A @ D_alpha
+
+    return S
+
+def batched_adv_diff(A: torch.Tensor, 
+                    alpha: float,
+                    gamma_diff: float,
+                    gamma_adv: float) -> torch.Tensor:
+    
+    gamma_adv * batched_hub_laplacian(A, alpha) + gamma_diff * batched_hub_laplacian(A, alpha=0)
