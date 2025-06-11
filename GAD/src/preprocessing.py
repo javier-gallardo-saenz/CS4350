@@ -1,14 +1,15 @@
-
 from torch_geometric.utils import to_dense_adj, get_laplacian, dense_to_sparse
 from torch_geometric.data import Data
 
+from hub_utils.hub_operators import hub_laplacian_dense_pytorch, hub_advection_diffusion_laplacian_dense_pytorch
 
 import torch
 import torch.nn as nn
 import numpy as np
 import scipy
 
-def preprocessing_dataset(dataset, num_of_eigenvectors):
+
+def preprocessing_dataset(dataset, num_of_eigenvectors: int, message_passing_operator: str = "Laplacian"):
 
     # Calculate and store the vector field F 
 
@@ -32,14 +33,31 @@ def preprocessing_dataset(dataset, num_of_eigenvectors):
 
         node_deg_mat = torch.diag(node_deg_vec[:, 0])
 
+        if message_passing_operator == "Laplacian":
+            lap_mat = get_laplacian(dataset[index].edge_index)
 
-        lap_mat = get_laplacian(dataset[index].edge_index)
-        L = to_dense_adj(edge_index = lap_mat[0], edge_attr = lap_mat[1])[0]
+            L = to_dense_adj(edge_index=lap_mat[0], edge_attr=lap_mat[1])[0]
 
-        # calculate the  eigenvalues and the eigenvectors for the lap_matrix
+            # calculate the  eigenvalues and the eigenvectors for the lap_matrix
 
-        w = scipy.linalg.eigh(L.cpu(), b = node_deg_mat.cpu())
-        eigenvalues, eigenvectors = w[0], w[1]
+            w = scipy.linalg.eigh(L.cpu(), b=node_deg_mat.cpu())
+            eigenvalues, eigenvectors = w[0], w[1]
+
+        elif message_passing_operator == "Hub_Advection_Diffusion":
+            L = hub_advection_diffusion_laplacian_dense_pytorch(A=adj, alpha=0.5,
+                                                                gamma_diff=0.5, gamma_adv=0.5)
+
+            #we annot use eigh anymore
+            eigvals, eigvecs = scipy.linal.eig(L.cpu())
+            eigvals = eigvals.real
+            eigvecs = eigvecs.real
+
+
+
+        elif message_passing_operator == "Hub_Laplacian":
+            L = hub_laplacian_dense_pytorch(A=adj, alpha=0.5,)
+
+
 
 
         # sort the eigenvectors in ascending order

@@ -77,7 +77,7 @@ def train_epoch(model ,data_loader, optimizer, prop_idx, factor, device, loss_fn
 
             
             lap_mat_sparse = get_laplacian(batched_graph.edge_index)
-            lap_mat = to_dense_adj(edge_index = lap_mat_sparse[0], edge_attr = lap_mat_sparse[1], max_num_nodes = num_nodes)[0].to(device)
+            lap_mat = to_dense_adj(edge_index=lap_mat_sparse[0], edge_attr=lap_mat_sparse[1], max_num_nodes=num_nodes)[0].to(device)
 
         
             F_norm_edge = batched_graph.F_norm_edge.to(device)
