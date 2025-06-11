@@ -1,7 +1,7 @@
 #main.py
 import torch 
 from torch.nn import Tanh
-from utils.operators import batched_hub_laplacian, batched_adv_diff
+from utils.operators import hub_laplacian, adv_diff
 from gcnn_train import train
 
 PARAMS ={
@@ -23,18 +23,15 @@ if __name__ == "__main__":
         "min_lr": 1e-5,
         "num_epochs": 300,
         "weight_decay": 1e-5,
-        "dims": [11, 64, 64, 1],  # Assuming 11 input features in QM9
+        "dims": [11, 128, 128,  1],  # assuming 11 input features in QM9
         "degrees": [1, 1],  # polynomial degrees per layer
         "act_fns": [torch.nn.Tanh(), torch.nn.Tanh()],
         "readout_dims": [128, 64, 1],  # readout MLP layers
+        "gso_generator": adv_diff
     }
+    # train the model
+    model, best_val_loss, test_loss = train(PARAMS)
 
-    # GSO generator function (batched version)
-    gso_generator = lambda A: batched_hub_laplacian(A, alpha=0.5)
-
-    # Train the model
-    model, best_val_loss, test_loss = train(PARAMS, gso_generator)
-
-    # Optionally, save the trained model
-    torch.save(model.state_dict(), "best_model.pth")
+    # save the trained model
+    torch.save(model.state_dict(), "model.pth")
     print(f"Training finished! Best Val Loss: {best_val_loss:.4f}, Test Loss: {test_loss:.4f}")

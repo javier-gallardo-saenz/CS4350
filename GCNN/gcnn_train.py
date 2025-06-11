@@ -22,12 +22,12 @@ def get_data_loaders(batch_size=64):
 
     return train_loader, val_loader, test_loader
 
-def build_model(params, gso_generator):
+def build_model(params):
     model = GCNNalpha(
         dims=params["dims"],
         degrees=params["degrees"],
         activations=params["act_fns"],
-        gso_generator=gso_generator,
+        gso_generator=params["gso_generator"],
         readout_dims=params.get("readout_dims", [128, 1])
     )
     return model
@@ -71,11 +71,11 @@ def eval_epoch(model, data_loader, loss_fn, device):
 
     return epoch_loss / len(data_loader)
 
-def train(params, gso_generator, batch_size=64):
+def train(params, batch_size=64):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train_loader, val_loader, test_loader = get_data_loaders(batch_size)
 
-    model = build_model(params, gso_generator).to(device)
+    model = build_model(params).to(device)
     optimizer = optim.Adam(model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=15, factor=0.5, verbose=True)
     loss_fn = nn.L1Loss()

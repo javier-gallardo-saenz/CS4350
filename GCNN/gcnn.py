@@ -33,11 +33,13 @@ class ConvLayer(nn.Module):
 
 class GCNNalpha(nn.Module):
     def __init__(self, dims: list, degrees: list, activations: list,
-                  gso_generator: nn.Module, readout_dims=None):
+                  gso_generator: callable, alpha: int= 0.5, pooling_fn=None, readout_dims=None):
         super().__init__()
 
+        self.pooling_fn = pooling_fn
         self.gso_generator = gso_generator 
-
+        self.alpha = nn.Parameter(torch.tensor(alpha))
+        
         self.layers = nn.ModuleList()
         for i in range(len(dims) - 1):
             in_dim = dims[i]
@@ -66,7 +68,7 @@ class GCNNalpha(nn.Module):
             num_nodes_i = (A_i.sum(dim=1) != 0).sum().item()
             num_nodes_per_graph.append(num_nodes_i)
             A_i = A_i[:num_nodes_i, :num_nodes_i]  # crop to real adj since torch pads
-            S_i = self.gso_generator(A_i) 
+            S_i = self.gso_generator(A_i, self.alpha) 
             gsos.append(S_i)
         
         # block diagonal matrix (we should sparify later)
@@ -79,12 +81,13 @@ class GCNNalpha(nn.Module):
             if activation is not None:
                 x = activation(x)
 
-        x = self.pooling(x, batch)
+        if self.pooling_fn is not None:
+            x = self.pooling_fn(x, batch)
+        else:
+            # fallback default pooling
+            from torch_geometric.nn import global_mean_pool
+            x = global_mean_pool(x, batch)
 
         if self.readout is not None:
             return self.readout(x).squeeze(-1)
         return x
-    
-    def pooling(self, x, batch):
-        from torch_geometric.nn import global_mean_pool
-        return global_mean_pool(x, batch)

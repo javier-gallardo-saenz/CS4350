@@ -132,12 +132,3 @@ def preprocessing_dataset(
         out.append(Data.from_dict(d))
     return out
 
-
-"""
-processed_dataset = preprocessing_dataset(
-    my_dataset,
-    num_of_eigenvectors=k,
-    laplacian_fn=hub_laplacian,
-    alpha=0.8 # Only 'alpha' is needed for hub_laplacian
-)
-"""
