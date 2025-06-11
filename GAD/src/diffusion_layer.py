@@ -1,6 +1,7 @@
 
 import torch
 import torch.nn as nn
+import inspect
 
 # Helper function
 
@@ -13,7 +14,7 @@ def get_mask(k, batch_num_nodes, num_nodes, device):
         partial_n = partial_n + n
         partial_k = partial_k + k
     return mask
-  
+
 #-----------------------------------------------
 # Diffusion Layer from DAG, d/dt X = D^{1}LX
 #-----------------------------------------------
@@ -34,7 +35,7 @@ class Diffusion_layer(nn.Module):
         nn.init.constant_(self.diffusion_time, 0.0)
 
     def forward(self, node_fts, node_deg_vec, node_deg_mat, operator, k_eig_val, k_eig_vec, num_nodes, batch_idx):
-    
+
 
         with torch.no_grad():
 
@@ -42,7 +43,7 @@ class Diffusion_layer(nn.Module):
 
         if self.method == 'spectral':
 
-            _, indices_of_each_graph = torch.unique(batch_idx, return_counts = True)
+            _, indices_of_each_graph = torch.unique(batch_idx, return_counts=True)
             
             indices_of_each_graph = indices_of_each_graph.to(self.device)
 
@@ -128,7 +129,7 @@ class Diffusion_layer_DegOperators(nn.Module):
 
         cholesky_factors = torch.linalg.cholesky(mat_)
 
-        cholesky_decomp = node_fts
+        cholesky_decomp = node_fts * node_deg_vec
 
         cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
 
@@ -164,8 +165,15 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
         self.alpha = nn.Parameter(torch.Tensor(1))
 
         nn.init.constant_(self.diffusion_time, 0.0)
+        nn.init.constant_(self.gamma_adv, 0.5)
+        nn.init.constant_(self.gamma_diff, 0.5)
+        nn.init.constant_(self.alpha, 0.0)
 
     def forward(self, node_fts, node_deg_vec, node_deg_mat, operator, k_eig_val, k_eig_vec, num_nodes, batch_idx):
+        #make sure operator is a function
+        sig = inspect.signature(operator)
+        if len(sig.parameters) != 3:
+            raise ValueError("The operator function must take exactly 3 arguments: gamma_adv, gamma_diff, alpha.")
 
         with torch.no_grad():
 
@@ -177,7 +185,7 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
 
         cholesky_factors = torch.linalg.cholesky(mat_)
 
-        cholesky_decomp = node_fts
+        cholesky_decomp = node_fts * node_deg_vec
 
         cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
 

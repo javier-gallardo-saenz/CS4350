@@ -39,7 +39,7 @@ def train_ZINC(model, optimizer, train_loader, val_loader, device, num_epochs, m
             print("lr equal to min_lr: exist")
             break
         
-        epoch_train_mae, optimizer = train_epoch(model ,train_loader, optimizer, device, loss_fn)
+        epoch_train_mae, optimizer = train_epoch(model, train_loader, optimizer, device, loss_fn)
         epoch_val_mae = evaluate_network(model,  val_loader, device)
 
         epoch_train_MAEs.append(epoch_train_mae)
