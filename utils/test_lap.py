@@ -1,49 +1,72 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch 
+from operators import hub_laplacian
 from preprocessing import compute_spectral_features, compute_flowmat
 import networkx as nx
 import numpy as np
 
 # Parameters
-sizes = [5, 5]  # two communities with 10 nodes each
-p_intra = 0.8     # high probability of edges inside communities
-p_inter = 0.2    # low probability of edges between communities
-probs = [[p_intra, p_inter], [p_inter, p_intra]]  # SBM probability matrix
+sizes = [5, 5]  # two communities of 5 nodes each
+p_intra = 0.8
+p_inter = 0.2
+probs = [[p_intra, p_inter], [p_inter, p_intra]]
 
-# Generate SBM graph
+# Generate SBM graph and adjacency
 G = nx.stochastic_block_model(sizes, probs, seed=42)
+adj_matrix = torch.tensor(nx.to_numpy_array(G), dtype=torch.float32)
 
-# Convert to numpy adjacency matrix
-adj_matrix = torch.tensor(nx.to_numpy_array(G))
+# Alpha values to consider
+alphas = [-1, 1, -0.5, 0.5]
+titles = [f"Alpha = {a}" for a in alphas]
 
-# alpha = -1 
-lowest, _, _ = compute_spectral_features(adj_matrix, num_nodes=6, k=5, alpha=-1, gamma_diff=0, gamma_adv=1)
-F_r, F_norm_edge, F_dig= compute_flowmat(adj_matrix, lowest)
+# Prepare flow matrices container
+flow_matrices = []
 
-# alpha = 0
-lowest, _, _ = compute_spectral_features(adj_matrix, num_nodes=6, k=5, alpha=0, gamma_diff=0, gamma_adv=1)
-F_l, F_norm_edge, F_dig= compute_flowmat(adj_matrix, lowest)
+# Compute flow matrices for each alpha
+for alpha in alphas:
+    lowest, _, _ = compute_spectral_features(
+        adj_matrix,
+        num_nodes=adj_matrix.shape[0],
+        k=5,
+        laplacian_fn=hub_laplacian,
+        alpha=alpha
+    )
+    F, _ = compute_flowmat(adj_matrix, lowest)  # compute_flowmat returns two outputs
+    flow_matrices.append(F)
 
-# alpha = 1
-lowest, _, _ = compute_spectral_features(adj_matrix, num_nodes=6, k=5, alpha=1, gamma_diff=0, gamma_adv=1)
-F_a, F_norm_edge, F_dig= compute_flowmat(adj_matrix, lowest)
+# Compute for alpha=0 (bottom row)
+lowest_0, _, _ = compute_spectral_features(
+    adj_matrix,
+    num_nodes=adj_matrix.shape[0],
+    k=5,
+    laplacian_fn=hub_laplacian,
+    alpha=0  # Correct alpha=0 here
+)
+F_0, _ = compute_flowmat(adj_matrix, lowest_0)
 
+# Create 2x3 subplot grid
+fig, axs = plt.subplots(2, 3, figsize=(18, 10))
+axs = axs.flatten()
 
+# Plot SBM graph top-left
+pos = nx.spring_layout(G, seed=42)
+nx.draw(G, pos, ax=axs[0], with_labels=True, node_color='lightblue', edge_color='gray', node_size=500)
+axs[0].set_title("Stochastic Block Model Graph")
 
-fig, axs = plt.subplots(1, 3, figsize=(18, 5))  # 1 row, 2 cols
+# Plot flow matrices heatmaps for alphas in top row (excluding graph slot)
+for i, (F, alpha) in enumerate(zip(flow_matrices, alphas)):
+    ax = axs[i + 1]  # offset 1 for graph plot
+    sns.heatmap(F.T, ax=ax, cmap='magma', annot=True)
+    ax.set_title(f"Flow matrix (alpha={alpha})")
 
-# Plot heatmap 1
-sns.heatmap(F_r.T, ax=axs[0], cmap='magma', annot=True)
-axs[0].set_title("Repelling 1")
+# Bottom row center plot: alpha=0 flow matrix, red colormap
+sns.heatmap(F_0.T, ax=axs[5], cmap='Reds', annot=True)
+axs[5].set_title("Flow matrix (alpha=0)")
 
-# Plot heatmap 2
-sns.heatmap(F_l.T, ax=axs[1], cmap='magma', annot=True)
-axs[1].set_title("Laplacian")
-
-# Plot heatmap 2
-sns.heatmap(F_a.T, ax=axs[2], cmap='magma', annot=True)
-axs[2].set_title("Attracting 2")
+# Hide empty subplots (bottom left: axs[3], bottom middle: axs[4]) for cleaner look
+axs[3].axis('off')
+axs[4].axis('off')
 
 plt.tight_layout()
 plt.show()
