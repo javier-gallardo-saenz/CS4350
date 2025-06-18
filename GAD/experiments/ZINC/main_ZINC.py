@@ -17,6 +17,7 @@ from preprocessing import preprocessing_dataset, average_node_degree
 from train_eval_ZINC import train_epoch, evaluate_network
 from GAD_ZINC.gad import GAD
 
+
 def train_ZINC(model, optimizer, train_loader, val_loader, device, num_epochs, min_lr):
 
     loss_fn = nn.L1Loss()
@@ -120,11 +121,14 @@ def main():
 
     print("create GAD model")
     
-    model = GAD(num_atom_type = 28, num_bond_type = 4, hid_dim = args.hid_dim, graph_norm = args.use_graph_norm, 
-               batch_norm = args.use_batch_norm, dropout = args.dropout, readout = args.readout, aggregators = args.aggregators,
-               scalers = args.scalers, edge_fts = args.use_edge_fts, avg_d = avg_d, D = D, device = device, towers= args.towers,
-               type_net = args.type_net, residual = args.use_residual, use_diffusion = args.use_diffusion, 
-               diffusion_method = args.diffusion_method, k = args.k, n_layers = args.n_layers)
+    model = GAD(num_atom_type=28, num_bond_type=4, hid_dim=args.hid_dim, graph_norm=args.use_graph_norm,
+                batch_norm=args.use_batch_norm, dropout=args.dropout, readout=args.readout,
+                aggregators=args.aggregators, scalers=args.scalers,
+                edge_fts=args.use_edge_fts, avg_d=avg_d, D=D,
+                device=device, towers=args.towers,
+                type_net=args.type_net, residual=args.use_residual,
+                use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
+                k=args.k, n_layers=args.n_layers)
     
 
     model = model.to(device)

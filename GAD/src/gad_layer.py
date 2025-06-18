@@ -45,6 +45,7 @@ class GAD_layer(nn.Module):
     def forward(self, node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat,
                 k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx):
 
+
         if self.use_diffusion:
             diffusion_out   = self.diffusion_layer(node_fts, node_deg_vec, node_deg_mat, lap_mat, k_eig_val, k_eig_vec,
                                                    num_nodes, batch_idx)
