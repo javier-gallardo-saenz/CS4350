@@ -14,7 +14,7 @@ import argparse
 sys.path.append(os.path.join(os.path.dirname(__file__), "../")) 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../src/")) 
 
-from ZINC.preprocessing import preprocessing_dataset, average_node_degree
+from utils.preprocessing import preprocessing_dataset, average_node_degree
 from train_eval_QM9 import train_epoch, evaluate_network
 from GAD_QM9.gad import GAD
 
@@ -40,7 +40,7 @@ def train_QM9(model, optimizer, train_loader, val_loader, prop_idx, factor, devi
             print("lr equal to min_lr: exist")
             break
         
-        epoch_train_mae, optimizer = train_epoch(model ,train_loader, optimizer, prop_idx, factor, device, loss_fn)
+        epoch_train_mae, optimizer = train_epoch(model, train_loader, optimizer, prop_idx, factor, device, loss_fn)
         epoch_val_mae = evaluate_network(model, val_loader, prop_idx, factor, device)
 
         epoch_train_MAEs.append(epoch_train_mae)
@@ -48,7 +48,7 @@ def train_QM9(model, optimizer, train_loader, val_loader, prop_idx, factor, devi
 
         scheduler.step(epoch_val_mae)
         if(epoch_val_mae < Best_val_mae):
-            Best_val_mae =  epoch_val_mae
+            Best_val_mae = epoch_val_mae
             torch.save(model, 'model.pth')
 
         torch.save(model, 'model_running.pth')
@@ -59,6 +59,7 @@ def train_QM9(model, optimizer, train_loader, val_loader, prop_idx, factor, devi
         print("epoch_val_MAE", epoch_val_mae)
         
     print("Finish training")
+
 
 def main():
 
@@ -77,8 +78,8 @@ def main():
     parser.add_argument('--diffusion_method', help="Enter the diffusion layer solving scheme ", type = str)
     parser.add_argument('--k', help="Enter the num of eigenvector for spectral scheme", type = int)
 
-    parser.add_argument('--aggregators', help="Enter the aggregators", type = str)
-    parser.add_argument('--scalers', help="Enter the scalers", type = str)
+    parser.add_argument('--aggregators', nargs='+', help="Enter the aggregators (space-separated list)", type=str)
+    parser.add_argument('--scalers', nargs='+', help="Enter the scalers (space-separated list)", type=str)
 
     parser.add_argument('--use_edge_fts', help="Enter true if you want to use the edge_fts", type = bool)
     parser.add_argument('--use_graph_norm', help="Enter true if you want to use graph_norm", type = bool ,default=True)
@@ -99,17 +100,38 @@ def main():
     parser.add_argument('--min_lr', help="Enter the minimum lr", type = float)
     
     args = parser.parse_args()
-    
-    print("downloading the dataset (QM9)")
-    dataset = QM9(root='/')
-    dataset = dataset.shuffle()
-    
-    dataset_test = dataset[:10000]
-    dataset_val = dataset[10000:20000]
-    dataset_train = dataset[20000:]
-    print("dataset_train contains ", len(dataset_train), "samples")
-    print("dataset_val contains ", len(dataset_val), "samples")
-    print("dataset_test contains ", len(dataset_test), "samples")
+
+    DATA_DIR = './data/QM9'
+
+    # --- Create the directory if it doesn't exist ---
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    # check if QM9 already exists locally to avoid redownloading
+    processed_dir = os.path.join(DATA_DIR, 'processed')
+    if os.path.exists(processed_dir) and len(os.listdir(processed_dir)) > 0:
+        print(f"Loading QM9 dataset from local storage: {DATA_DIR}")
+        # force_reload=False ensures it doesn't redownload/reprocess if already present
+        dataset = QM9(root=DATA_DIR, force_reload=False)
+    else:
+        print(f"QM9 dataset not found locally in {DATA_DIR}. Downloading and processing...")
+        # This will trigger download and initial processing
+        dataset = QM9(root=DATA_DIR, force_reload=True)  # force_reload=True is default for first time
+        print("Download and initial processing complete.")
+
+    dataset = dataset.shuffle()  # This shuffles the entire dataset in-place
+
+    # Define the split points
+    test_split_end = 10000
+    val_split_end = 20000
+
+    dataset_test = dataset[:test_split_end]
+    dataset_val = dataset[test_split_end:val_split_end]
+    dataset_train = dataset[val_split_end:]  # All remaining samples
+
+    print("Dataset loading and splitting complete.")
+    print(f"dataset_train contains {len(dataset_train)} samples")
+    print(f"dataset_val contains {len(dataset_val)} samples")
+    print(f"dataset_test contains {len(dataset_test)} samples")
 
     print("data preprocessing: calculate and store the vector field F, etc.")
 

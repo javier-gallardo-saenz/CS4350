@@ -84,7 +84,7 @@ class GAD(nn.Module):
             
         output = self.layer_last(node_fts)
 
-        output = scatter(output, batch_idx, dim=0, reduce= self.readout)
+        output = scatter(output, batch_idx, dim=0, reduce=self.readout)
 
         output = self.readout_MLP(output)
         
