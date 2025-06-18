@@ -1,11 +1,25 @@
 ## Description 
 Here we include the scripts to generate our results on QM9 dataset, including uploading the data, preprocessing steps, etc. 
 
-***To run GAD model on QM9 properties***:
+***To control the operator used to create the eigenmaps***:
 
-###---------------
-Currently working
-###---------------
+-> Laplacian: 
+    ```
+    --operator='Laplacian'
+    ```
+
+-> Hubs Laplacian:
+    ````
+    --operator="Hub_Laplacian'  --alpha=0.5 
+    ````
+
+-> Hubs Advection-Diffusion Operator:
+    ````
+    --operator="Hub_Advection_Diffusion' --alpha=0.5 --gamma_adv=0.5 --gamma_diff=0.5 (example)
+    ````
+
+
+***To run GAD model on QM9 properties***:
 
 $\mu$ (Dipole moment). Unit: $\textrm{D}$
 

@@ -5,56 +5,78 @@ from torch import Tensor
 from torch_geometric.utils import to_dense_adj, dense_to_sparse
 from torch_geometric.data import Data
 from typing import List, Tuple, Dict, Any, Callable
+from tqdm import tqdm
+
 
 def compute_spectral_features(
     adj: torch.Tensor,
     num_nodes: int,
     k: int,
-    laplacian_fn: Callable[..., np.ndarray],
+    laplacian_fn: Callable[..., torch.Tensor], # laplacian_fn is expected to return torch.Tensor
     **kwargs: Any
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute spectral features using a provided Laplacian function.
     Selects the first non-trivial eigenvector, and returns top-k eigenvectors and values.
+    Assumes L is a torch.Tensor and its eigenvalues are real and positive,
+    but the matrix itself might not be symmetric, requiring torch.linalg.eig.
     """
-    A = adj.cpu().numpy()
-    L = laplacian_fn(A, **kwargs)
+    # L is a torch.Tensor, as returned by laplacian_fn
+    L = laplacian_fn(adj, **kwargs)
 
-    # compute eigen-decomposition
-    vals, vecs = scipy.linalg.eig(L)
-    vals = np.real(vals)
-    vecs = np.real(vecs)
+    # Store original device and dtype to return tensors in the same format
+    original_device = L.device
+    original_dtype = L.dtype
 
-    # sort by eigenvalue magnitude
-    idx = np.argsort(vals)
-    vals = vals[idx]
-    vecs = vecs[:, idx]
+    # Move to CPU and use float64 for eigendecomposition for stability and precision.
+    # torch.linalg.eig can also run on GPU, but CPU+float64 is generally more robust
+    # for numerical stability in eigendecomposition, especially for larger or tricky matrices.
+    L_compute = L.to(torch.float64).cpu()
 
-    # remove (near-)zero eigenvalues (trivial modes)
+    # Compute eigen-decomposition using PyTorch's general eigenvalue function.
+    # This will return complex tensors for both eigenvalues and eigenvectors.
+    vals_complex, vecs_complex = torch.linalg.eig(L_compute)
+
+    # Since we are guaranteed real eigenvalues, take the real part and discard the imaginary.
+    # vals_complex will be complex64 or complex128.
+    vals = torch.real(vals_complex)
+    vecs = torch.real(vecs_complex) # Also take the real part of eigenvectors
+
+    # Since eigenvalues are guaranteed positive, sorting by magnitude is equivalent to sorting by value.
+    # Sort eigenvalues in ascending order and get the sorting indices.
+    vals_sorted, idx = torch.sort(vals)
+    vecs_sorted = vecs[:, idx]
+
+    # Remove (near-)zero eigenvalues (trivial modes).
+    # Since eigenvalues are guaranteed positive, we can just check if they are greater than tolerance.
     tol = 1e-6
-    non_trivial_indices = np.where(np.abs(vals) > tol)[0]
+    non_trivial_indices = torch.where(vals_sorted > tol)[0]  # Check for positive values > tol
 
     if len(non_trivial_indices) == 0:
-        print("Warning: No non-trivial eigenvalues found.")
-        i_low = 0
+        print(f"Warning: No non-trivial (positive and > {tol}) eigenvalues found. "
+              "Defaulting to the smallest (often trivial) eigenvector.")
+        i_low = 0  # Default to the smallest eigenvalue's eigenvector
     else:
-        i_low = non_trivial_indices[0]
+        i_low = non_trivial_indices[0]  # Select the index of the first non-trivial (positive) eigenvalue
 
-    # select the first non-trivial eigenvector
-    lowest = torch.from_numpy(vecs[:, i_low]).float()
+    # Select the first non-trivial eigenvector
+    lowest = vecs_sorted[:, i_low].to(original_dtype).to(original_device)
 
-    # get top-k eigenvectors and eigenvalues 
-    eig_vals = vals[:k]
-    eig_vecs = vecs[:, :k]
+    # Get top-k eigenvectors and eigenvalues
+    # "Top-k" in spectral features usually refers to the smallest non-trivial eigenvalues
+    # (corresponding to low-frequency modes). So, taking the first k from the sorted list
+    # (which are the smallest) makes sense.
+    effective_k = min(k, vals_sorted.shape[0])
 
-    eig_vals = torch.from_numpy(eig_vals).float()
-    eig_vecs = torch.from_numpy(eig_vecs).float()
+    eig_vals = vals_sorted[:effective_k].to(original_dtype).to(original_device)
+    eig_vecs = vecs_sorted[:, :effective_k].to(original_dtype).to(original_device)
 
-    # pad if needed
+    # Pad if needed (using PyTorch operations)
     if eig_vecs.shape[1] < k:
         pad_dim = k - eig_vecs.shape[1]
-        eig_vecs = torch.cat([eig_vecs, torch.zeros(num_nodes, pad_dim)], dim=1)
-        eig_vals = torch.cat([eig_vals, torch.zeros(pad_dim)], dim=0)
+        # Create zero tensors directly with PyTorch, and place them on the original device
+        eig_vecs = torch.cat([eig_vecs, torch.zeros(num_nodes, pad_dim, dtype=original_dtype, device=original_device)], dim=1)
+        eig_vals = torch.cat([eig_vals, torch.zeros(pad_dim, dtype=original_dtype, device=original_device)], dim=0)
 
     return lowest, eig_vecs, eig_vals
 
@@ -65,25 +87,32 @@ def compute_flowmat(adj: Tensor, lowest: Tensor) -> Tuple[Tensor, Tensor]:
     From dense adj and lowest eig vector, build
     directed, normalized flow F_norm_edge & its degree F_dig
     """
-    A = adj.cpu().numpy()
-    F = np.zeros_like(A, dtype=np.float32)
-    n = A.shape[0]
+    # Initialize F with the same shape as adj, and desired float32 dtype
+    F = torch.zeros_like(adj, dtype=torch.float32)
+    n = adj.shape[0]
 
     # construct gradient flow vector field
+    # Iterate through indices. This loop is inherently sequential.
+    # For very large graphs, consider if this can be vectorized.
     for i in range(n):
         for j in range(n):
-            if A[i, j] == 1:
+            # adj[i, j] directly works with torch.Tensor
+            if adj[i, j].item() == 1: # .item() is good here to compare a single tensor element
                 diff = lowest[i] - lowest[j]
-                F[i, j] = diff.item() if diff.item() != 0 else 1e-8
+                # No need for .item() here if diff is already a scalar tensor
+                # You can directly assign tensor to tensor element
+                F[i, j] = diff if diff != 0 else torch.tensor(1e-8, dtype=torch.float32)
 
-    # normalize rows
-    row_sums = np.linalg.norm(F, ord=1, axis=1, keepdims=True) + 1e-20
-    F_norm = F / row_sums  # matrix: strenth of node i flow to node j
+    # Normalize rows using torch.linalg.norm
+    # Use torch.linalg.norm for PyTorch tensors
+    row_sums = torch.linalg.norm(F, ord=1, dim=1, keepdim=True) + 1e-20
+    F_norm = F / row_sums  # matrix: strength of node i flow to node j
 
-    F_dig = torch.from_numpy(
-        F_norm.sum(axis=0)
-    )  # vec: total flow that each node receives from all other nodes
-    F_norm_edge = dense_to_sparse(torch.from_numpy(F_norm))[1]
+    # Use .sum(dim=0) for PyTorch tensor and avoid unnecessary from_numpy
+    F_dig = F_norm.sum(dim=0)  # vec: total flow that each node receives from all other nodes
+
+    # dense_to_sparse expects a torch.Tensor, no need for from_numpy
+    F_norm_edge = dense_to_sparse(F_norm)[1]
 
     return F_norm_edge, F_dig
 
@@ -148,7 +177,7 @@ processed_dataset = preprocessing_dataset(
 def average_node_degree(dataset):
     D = []
 
-    for i in range(len(dataset)):
+    for i in tqdm(range(len(dataset)), desc="Processing dataset"):
         adj = to_dense_adj(dataset[i].edge_index)[0]
 
         deg = adj.sum(axis=1, keepdim=True)  # Degree of nodes, shape [N, 1]

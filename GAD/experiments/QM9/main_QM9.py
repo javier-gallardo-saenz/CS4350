@@ -15,50 +15,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../src/")) 
 
 from utils.preprocessing import preprocessing_dataset, average_node_degree
+from utils.operator_preparation import get_operator_and_params
 from train_eval_QM9 import train_epoch, evaluate_network
+from train_QM9 import train_QM9
 from GAD_QM9.gad import GAD
-
-def train_QM9(model, optimizer, train_loader, val_loader, prop_idx, factor, device, num_epochs, min_lr):
-
-    loss_fn = nn.L1Loss()
-
-    scheduler = opt.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                     factor=0.5, 
-                                                     patience=15,
-                                                   threshold=0.004,
-                                                   verbose=True)
-
-    epoch_train_MAEs, epoch_val_MAEs = [], []
-    
-    Best_val_mae = 1000
-
-    print("Start training")
-
-    for epoch in range(num_epochs):
-        
-        if optimizer.param_groups[0]['lr'] < min_lr:
-            print("lr equal to min_lr: exist")
-            break
-        
-        epoch_train_mae, optimizer = train_epoch(model, train_loader, optimizer, prop_idx, factor, device, loss_fn)
-        epoch_val_mae = evaluate_network(model, val_loader, prop_idx, factor, device)
-
-        epoch_train_MAEs.append(epoch_train_mae)
-        epoch_val_MAEs.append(epoch_val_mae)
-
-        scheduler.step(epoch_val_mae)
-        if(epoch_val_mae < Best_val_mae):
-            Best_val_mae = epoch_val_mae
-            torch.save(model, 'model.pth')
-
-        torch.save(model, 'model_running.pth')
-
-        print("")
-        print("epoch_idx", epoch)
-        print("epoch_train_MAE", epoch_train_mae)
-        print("epoch_val_MAE", epoch_val_mae)
-        
-    print("Finish training")
 
 
 def main():
@@ -66,38 +26,47 @@ def main():
     parser = argparse.ArgumentParser()
     
 
-    parser.add_argument('--n_layers', help="Enter the number of GAD layers", type = int)
-    parser.add_argument('--hid_dim', help="Enter the hidden dimensions", type = int)
-    parser.add_argument('--atomic_emb', help="Enter the embedding dimensions of the atomic number", type = int)
+    parser.add_argument('--n_layers', help="Enter the number of GAD layers", type=int)
+    parser.add_argument('--hid_dim', help="Enter the hidden dimensions", type=int)
+    parser.add_argument('--atomic_emb', help="Enter the embedding dimensions of the atomic number", type=int)
     
-    parser.add_argument('--dropout', help="Enter the value of the dropout", type = int, default=0)
-    parser.add_argument('--readout', help="Enter the readout agggregator", type = str, default='mean')
+    parser.add_argument('--dropout', help="Enter the value of the dropout", type=int, default=0)
+    parser.add_argument('--readout', help="Enter the readout agggregator", type=str, default='mean')
 
     
-    parser.add_argument('--use_diffusion', help="Enter the use_diffusion", type = bool)
-    parser.add_argument('--diffusion_method', help="Enter the diffusion layer solving scheme ", type = str)
-    parser.add_argument('--k', help="Enter the num of eigenvector for spectral scheme", type = int)
+    parser.add_argument('--use_diffusion', help="Enter the use_diffusion", type=bool)
+    parser.add_argument('--diffusion_method', help="Enter the diffusion layer solving scheme ", type=str)
+    parser.add_argument('--k', help="Enter the num of eigenvector for spectral scheme", type=int)
 
     parser.add_argument('--aggregators', nargs='+', help="Enter the aggregators (space-separated list)", type=str)
     parser.add_argument('--scalers', nargs='+', help="Enter the scalers (space-separated list)", type=str)
 
-    parser.add_argument('--use_edge_fts', help="Enter true if you want to use the edge_fts", type = bool)
-    parser.add_argument('--use_graph_norm', help="Enter true if you want to use graph_norm", type = bool ,default=True)
-    parser.add_argument('--use_batch_norm', help="Enter true if you want to use batch_norm", type = bool ,default=True)
-    parser.add_argument('--use_residual', help="Enter true if you want to use residual connection", type = bool)
+    parser.add_argument('--use_edge_fts', help="Enter true if you want to use the edge_fts", type=bool)
+    parser.add_argument('--use_graph_norm', help="Enter true if you want to use graph_norm", type=bool, default=True)
+    parser.add_argument('--use_batch_norm', help="Enter true if you want to use batch_norm", type=bool, default=True)
+    parser.add_argument('--use_residual', help="Enter true if you want to use residual connection", type=bool)
 
-    parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type = str)
+    parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str)
     parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int)
 
-    parser.add_argument('--prop_idx', help="Enter the QM9 property index", type = int)
-    parser.add_argument('--factor', help="Enter the factor 1000 to convert the QM9 property with Unit eV to meV. Enter 1 for the others properties", type = int)
+    parser.add_argument('--prop_idx', help="Enter the QM9 property index", type=int)
+    parser.add_argument('--factor', help="Enter the factor 1000 to convert the QM9 property with Unit eV"
+                                         " to meV. Enter 1 for the others properties", type=int)
 
     
-    parser.add_argument('--num_epochs', help="Enter the num of epochs", type = int)
-    parser.add_argument('--batch_size', help="Enter the batch size", type = int)
-    parser.add_argument('--lr', help="Enter the learning rate", type = float)
-    parser.add_argument('--weight_decay', help="Enter the weight_decay", type = float)
-    parser.add_argument('--min_lr', help="Enter the minimum lr", type = float)
+    parser.add_argument('--num_epochs', help="Enter the num of epochs", type=int)
+    parser.add_argument('--batch_size', help="Enter the batch size", type=int)
+    parser.add_argument('--lr', help="Enter the learning rate", type=float)
+    parser.add_argument('--weight_decay', help="Enter the weight_decay", type=float)
+    parser.add_argument('--min_lr', help="Enter the minimum lr", type=float)
+
+    parser.add_argument('--operator', help="Enter the desired operator whose eigenvectors will define "
+                                           "the gradient maps", type=str, default='Laplacian')
+    parser.add_argument('--alpha', help="Value of the hub operator parameter alpha", default=0, type=float)
+    parser.add_argument('--gamma_adv', help="Enter advection weight for advection-diffusion operator",
+                        default=0, type=float)
+    parser.add_argument('--gamma_diff', help="Enter diffusion weight for advection-diffusion operator",
+                        default=0, type=float)
     
     args = parser.parse_args()
 
@@ -135,31 +104,35 @@ def main():
 
     print("data preprocessing: calculate and store the vector field F, etc.")
 
+    operator, params = get_operator_and_params(args.operator, args.alpha, args.gamma_adv, args.gamma_diff)
+
     D, avg_d = average_node_degree(dataset_train)
-    dataset_train = preprocessing_dataset(dataset_train, args.k)
-    dataset_val = preprocessing_dataset(dataset_val, args.k)
-    dataset_test = preprocessing_dataset(dataset_test, args.k)
+    dataset_train = preprocessing_dataset(dataset_train, args.k, operator, **params)
+    dataset_val = preprocessing_dataset(dataset_val, args.k, operator, **params)
+    dataset_test = preprocessing_dataset(dataset_test, args.k, operator, **params)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    train_loader = DataLoader(dataset = dataset_train, batch_size=args.batch_size, shuffle=True) 
-    val_loader = DataLoader(dataset = dataset_val, batch_size=args.batch_size, shuffle=False)
-    test_loader = DataLoader(dataset =  dataset_test, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(dataset=dataset_train, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(dataset=dataset_val, batch_size=args.batch_size, shuffle=False)
+    test_loader = DataLoader(dataset=dataset_test, batch_size=args.batch_size, shuffle=False)
 
     print("create GAD model")
     
-    model = GAD(num_of_node_fts = 11, num_of_edge_fts = 4, hid_dim = args.hid_dim, atomic_emb = args.atomic_emb, graph_norm = args.use_graph_norm, 
-               batch_norm = args.use_batch_norm, dropout = args.dropout, readout = args.readout, aggregators = args.aggregators,
-               scalers = args.scalers, edge_fts = args.use_edge_fts, avg_d = avg_d, D = D, device = device, towers= args.towers,
-               type_net = args.type_net, residual = args.use_residual, use_diffusion = args.use_diffusion, 
-               diffusion_method = args.diffusion_method, k = args.k, n_layers = args.n_layers)
+    model = GAD(num_of_node_fts=11, num_of_edge_fts=4, hid_dim=args.hid_dim, atomic_emb=args.atomic_emb,
+                graph_norm=args.use_graph_norm, batch_norm=args.use_batch_norm, dropout=args.dropout,
+                readout=args.readout, aggregators=args.aggregators, scalers=args.scalers, edge_fts=args.use_edge_fts,
+                avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
+                use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
+                k=args.k, n_layers=args.n_layers)
     
 
     model = model.to(device)
     
     optimizer = opt.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
-    train_QM9(model, optimizer, train_loader, val_loader, prop_idx = args.prop_idx, factor = args.factor, device=device, num_epochs = args.num_epochs, min_lr = args.min_lr)
+    train_QM9(model, optimizer, train_loader, val_loader, prop_idx=args.prop_idx, factor=args.factor, device=device,
+              num_epochs=args.num_epochs, min_lr=args.min_lr)
     
     print("Uploading the best model")
 
