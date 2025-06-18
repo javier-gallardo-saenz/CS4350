@@ -1,6 +1,5 @@
 from filters import create_filter_list
 from mlp import MLP
-
 from torch_geometric.utils import to_dense_adj
 import torch
 import torch.nn as nn
@@ -47,15 +46,11 @@ class GCNNalpha(nn.Module):
         activations: list, # Changed to list to hold activation functions for each layer
         gso_generator: callable,
         alpha: float = 0.5,
-        pooling_fn=None,
         readout_dims=None,
-        apply_pooling: bool = True,
         apply_readout: bool = True
     ):
         super().__init__()
 
-        self.pooling_fn = pooling_fn
-        self.apply_pooling = apply_pooling
         self.apply_readout = apply_readout
 
         self.alpha = nn.Parameter(torch.tensor(alpha, dtype=torch.float32))
@@ -86,17 +81,11 @@ class GCNNalpha(nn.Module):
         # default linear output mapping
         self.output_lin = nn.Linear(dims[-1], output_dim, bias=True)
 
-    def forward(self, X, batch, edge_index):
-        adj = to_dense_adj(edge_index, batch)
-        gsos = []
-        for i in range(adj.size(0)):
-            A_i = adj[i]
-            num_nodes_i = (A_i.sum(dim=1) != 0).sum().item()
-            A_i = A_i[:num_nodes_i, :num_nodes_i]
-            S_i = self.gso_generator(A_i, self.alpha)
-            gsos.append(S_i)
-
-        S = torch.block_diag(*gsos)
+    def forward(self, X, edge_index):
+        A = to_dense_adj(edge_index).squeeze(0)      # Convert edge_index to dense adjacency matrix
+        num_nodes = (A.sum(dim=1) != 0).sum().item()
+        A = A[:num_nodes, :num_nodes]
+        S = self.gso_generator(A, self.alpha)
 
         x = X
         for i, conv_layer in enumerate(self.layers):
@@ -104,13 +93,6 @@ class GCNNalpha(nn.Module):
             filters = create_filter_list(S, degree)
             conv_layer.filters = filters
             x = conv_layer(x)
-
-        if self.apply_pooling:
-            if self.pooling_fn is not None:
-                x = self.pooling_fn(x, batch)
-            else:
-                from torch_geometric.nn import global_mean_pool
-                x = global_mean_pool(x, batch)
 
         # apply readout or default linear mapping to output_dim
         if self.apply_readout:

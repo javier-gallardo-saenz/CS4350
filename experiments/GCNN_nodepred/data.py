@@ -1,21 +1,33 @@
-# data.py
-from torch_geometric.datasets import QM9
-from torch_geometric.loader import DataLoader
+from torch_geometric.datasets import KarateClub
+from torch_geometric.data import Data
+import torch
 
-def get_data_loaders(N: int, batch_size=64, targets=[0,1,2], split: tuple=(0.8, 0.1, 0.1), root='data/QM9'):
-    dataset = QM9(root=root)
-    dataset = dataset[:N] # only use the first N graphs 
-    dataset = dataset.shuffle()
+def get_karateclub_data():
+    dataset = KarateClub()
+    data = dataset[0]  # only one graph in the dataset
+    train_mask = data.train_mask # one training node per class
 
-    # select only the desired targets
-    dataset.data.y = dataset.data.y[:, targets]
+    num_nodes = data.num_nodes
+    
+    torch.manual_seed(42) 
+    unlabeled_mask = ~data.train_mask
+    unlabeled_indices = torch.where(unlabeled_mask)[0]
 
-    f_train, _, f_test = split
-    n1, n2 = int(N* f_train), int(N*(1-f_test))
+    shuffled_indices_permutation = torch.randperm(len(unlabeled_indices))
+    shuffled_unlabeled_indices = unlabeled_indices[shuffled_indices_permutation]
 
-    train, val, test = dataset[:n1], dataset[n1:n2], dataset[n2:]
-    return (
-        DataLoader(train, batch_size=batch_size, shuffle=True),
-        DataLoader(val,   batch_size=batch_size, shuffle=False),
-        DataLoader(test,  batch_size=batch_size, shuffle=False),
-    )
+    num_unlabeled = len(shuffled_unlabeled_indices)
+    split_point = num_unlabeled // 2  
+
+    validation_indices = shuffled_unlabeled_indices[:split_point]
+    test_indices = shuffled_unlabeled_indices[split_point:]
+
+    val_mask = torch.full((num_nodes,), False, dtype=torch.bool)
+    test_mask = torch.full((num_nodes,), False, dtype=torch.bool)
+
+    val_mask[validation_indices] = True
+    test_mask[test_indices] = True
+
+
+    # Return the full graph and the masks
+    return data, train_mask, val_mask, test_mask

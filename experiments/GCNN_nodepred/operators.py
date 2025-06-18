@@ -47,6 +47,7 @@ def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
     A: [N, N] adjacency (no padding, N = true node count).
     alpha: parameter.
     """
+    A = A.to(torch.float)
     deg = A.sum(dim=1)                 # [N]
 
     if alpha == 0:
