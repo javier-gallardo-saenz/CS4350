@@ -17,15 +17,23 @@ def train_epoch(model, data, optimizer, loss_fn, mask):
     return loss.item()
 
 @torch.no_grad()
-def eval_epoch(model, data, loss_fn, mask):
+def eval_epoch(model, data, loss_fn, mask, eval_embeddings=False):
     model.eval()
     with torch.no_grad():
-        out = model(data.x, data.edge_index)
-        loss = loss_fn(out[mask], data.y[mask])
-        pred = out.argmax(dim=1)
-        correct = pred[mask] == data.y[mask]
-        acc = int(correct.sum()) / int(mask.sum())
-    return loss.item(), acc
+        if eval_embeddings:
+            out, embeddings = model(data.x, data.edge_index, eval_embeddings=True)
+            loss = loss_fn(out[mask], data.y[mask])
+            pred = out.argmax(dim=1)
+            correct = pred[mask] == data.y[mask]
+            acc = int(correct.sum()) / int(mask.sum())
+            return loss.item(), acc, embeddings
+        else:
+            out = model(data.x, data.edge_index)
+            loss = loss_fn(out[mask], data.y[mask])
+            pred = out.argmax(dim=1)
+            correct = pred[mask] == data.y[mask]
+            acc = int(correct.sum()) / int(mask.sum())
+        return loss.item(), acc
 
 
 def run_experiment(params):
@@ -48,6 +56,7 @@ def run_experiment(params):
         alpha=params["alpha"],
         readout_dims=params.get("readout_dims", None),
         apply_readout=params.get("apply_readout", True),
+        eval_embeddings=params.get("eval_embeddings", False) 
     ).to(device)
 
     # optimizer, scheduler, loss
@@ -82,7 +91,8 @@ def run_experiment(params):
             
     # test on the best model
     model.load_state_dict(best_state)
-    _, test_acc = eval_epoch(model, data, loss_fn, test_mask) # Pass params here
+    _, test_acc, embeddings = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=True)
+    print(f"First embedding: {embeddings[0]}")
     print(f"Final test accuracy: {test_acc:.4f}")
 
     return best_val_ce, test_acc, val_ce_history # Return the history as well

@@ -3,7 +3,7 @@ from mlp import MLP
 from torch_geometric.utils import to_dense_adj
 import torch
 import torch.nn as nn
-from torch.nn import ReLU # Assuming ReLU is the activation used in params
+from torch.nn import ReLU, Tanh # Assuming ReLU or Tanh is the activation used in params
 
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, filter_list, activation=None):
@@ -47,7 +47,8 @@ class GCNNalpha(nn.Module):
         gso_generator: callable,
         alpha: float = 0.5,
         readout_dims=None,
-        apply_readout: bool = True
+        apply_readout: bool = True,
+        eval_embeddings: bool = False
     ):
         super().__init__()
 
@@ -81,18 +82,21 @@ class GCNNalpha(nn.Module):
         # default linear output mapping
         self.output_lin = nn.Linear(dims[-1], output_dim, bias=True)
 
-    def forward(self, X, edge_index):
+    def forward(self, X, edge_index, eval_embeddings = False):
         A = to_dense_adj(edge_index).squeeze(0)      # Convert edge_index to dense adjacency matrix
         num_nodes = (A.sum(dim=1) != 0).sum().item()
         A = A[:num_nodes, :num_nodes]
         S = self.gso_generator(A, self.alpha)
 
         x = X
+        emb_per_layer = [x] if eval_embeddings else None
         for i, conv_layer in enumerate(self.layers):
             degree = self.layer_degrees[i]
             filters = create_filter_list(S, degree)
             conv_layer.filters = filters
             x = conv_layer(x)
+            if eval_embeddings:
+                emb_per_layer.append(x)
 
         # apply readout or default linear mapping to output_dim
         if self.apply_readout:
@@ -100,5 +104,9 @@ class GCNNalpha(nn.Module):
                 x = self.readout(x)
             else:
                 x = self.output_lin(x)
-            return x.squeeze(-1) if x.dim() > 1 and x.size(-1) == 1 else x
-        return x
+            x = x.squeeze(-1) if x.dim() > 1 and x.size(-1) == 1 else x
+
+        if eval_embeddings:
+            return x, emb_per_layer
+        else:
+            return x

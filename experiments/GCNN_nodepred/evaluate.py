@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-def evaluate_cosine_similarity_per_layer(embeddings_per_layer, mask=None):
+def eval_cos_sim_per_layer(embeddings_per_layer, mask=None):
     """
     Computes the average pairwise cosine similarity for each layer of node embeddings.
 
@@ -37,4 +37,4 @@ def evaluate_cosine_similarity_per_layer(embeddings_per_layer, mask=None):
         avg_cos = pairwise_sims.mean().item()
         avg_cos_sims.append(avg_cos)
 
-    return avg_cos_sims
+    return sim_matrix, avg_cos_sims 
