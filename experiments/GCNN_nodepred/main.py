@@ -2,6 +2,7 @@
 from torch.nn import Tanh, ReLU
 from operators import hub_laplacian, adv_diff
 from gcnn_train import run_experiment
+from evaluate_similarity import eval_cos_sim_per_layer, plot_avg_similarity, plot_similarity_heatmap
 
 if __name__ == "__main__":
     PARAMS = {
@@ -18,8 +19,18 @@ if __name__ == "__main__":
         "gso_generator": hub_laplacian,
         "eval_embeddings": True,  # set to True if you want to return embeddings
     }
-    best_val_ce, test_acc, val_ce_history = run_experiment(PARAMS)
+    
+    best_val_ce, test_acc, val_ce_history, embeddings = run_experiment(PARAMS)
     print("\nExperiment Summary:")
     print(f"Best Validation Cross-Entropy: {best_val_ce:.4f}")
     print(f"Test Accuracy: {test_acc:.4f}")
     #print(f"Validation Cross-Entropy History: {val_ce_history}")
+
+    # evaluate cosine similarity of embeddings per layer
+    sim_matrices, avg_cos_sims = eval_cos_sim_per_layer(embeddings, mask=None)
+
+    #for i, sim_matrix in enumerate(sim_matrices):
+    #    plot_similarity_heatmap(sim_matrix, title=f"Layer {i + 1} Cosine Similarity")
+
+    plot_avg_similarity(avg_cos_sims)
+

@@ -1,5 +1,42 @@
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def plot_similarity_heatmap(sim_matrix, title="Cosine Similarity Matrix"):
+    """
+    Plots a heatmap of a cosine similarity matrix.
+
+    Args:
+        sim_matrix (Tensor): Tensor [N x N] representing cosine similarities.
+        title (str): Title for the heatmap.
+    """
+    sim_np = sim_matrix.detach().cpu().numpy()
+    
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(sim_np, cmap="viridis", square=True, cbar=True)
+    plt.title(title)
+    plt.xlabel("Node Index")
+    plt.ylabel("Node Index")
+    plt.tight_layout()
+    plt.show()
+
+def plot_avg_similarity(avg_cos_sims):
+    """
+    Plots average cosine similarity per layer.
+
+    Args:
+        avg_cos_sims (List[float]): Average cosine similarity per layer.
+    """
+    layers = list(range(len(avg_cos_sims)))
+    plt.figure(figsize=(8, 5))
+    plt.plot(layers, avg_cos_sims, marker='o', linestyle='-')
+    plt.xlabel("Layer")
+    plt.ylabel("Average Cosine Similarity")
+    plt.title("Average Pairwise Cosine Similarity per Layer")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 def eval_cos_sim_per_layer(embeddings_per_layer, mask=None):
     """
@@ -14,6 +51,7 @@ def eval_cos_sim_per_layer(embeddings_per_layer, mask=None):
         List[float]: Average cosine similarity per layer.
     """
     avg_cos_sims = []
+    sim_matrices = []
 
     for emb in embeddings_per_layer:
         if mask is not None:
@@ -36,5 +74,6 @@ def eval_cos_sim_per_layer(embeddings_per_layer, mask=None):
 
         avg_cos = pairwise_sims.mean().item()
         avg_cos_sims.append(avg_cos)
+        sim_matrices.append(sim_matrix)
 
-    return sim_matrix, avg_cos_sims 
+    return sim_matrices, avg_cos_sims

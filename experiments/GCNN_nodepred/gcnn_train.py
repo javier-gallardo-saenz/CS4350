@@ -91,8 +91,13 @@ def run_experiment(params):
             
     # test on the best model
     model.load_state_dict(best_state)
-    _, test_acc, embeddings = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=True)
-    print(f"First embedding: {embeddings[0]}")
-    print(f"Final test accuracy: {test_acc:.4f}")
 
-    return best_val_ce, test_acc, val_ce_history # Return the history as well
+    if params.get("eval_embeddings", False):
+        _, test_acc, embeddings = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=True)
+    else:
+        _, test_acc = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=False)
+
+    if params.get("eval_embeddings", False):
+        return best_val_ce, test_acc, val_ce_history, embeddings # Return the history as well
+    else:
+        return best_val_ce, test_acc, val_ce_history
