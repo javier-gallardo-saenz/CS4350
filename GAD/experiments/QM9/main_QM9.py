@@ -59,7 +59,8 @@ def main():
     parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str, default='simple')
     parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int, default=3)
 
-    parser.add_argument('--prop_idx', help="Enter the QM9 property index", type=int)
+    parser.add_argument('--prop_idx', type=int, nargs='+', help='Indices of the properties to learn '
+                                                                 '(e.g., 0 1 2). At least one index is required.')
     parser.add_argument('--factor', help="Enter the factor 1000 to convert the QM9 property with Unit eV"
                                          " to meV. Enter 1 for the others properties", type=int)
 
@@ -69,6 +70,7 @@ def main():
     parser.add_argument('--lr', help="Enter the learning rate", type=float)
     parser.add_argument('--weight_decay', help="Enter the weight_decay", type=float)
     parser.add_argument('--min_lr', help="Enter the minimum lr", type=float)
+    parser.add_argument('--patience', help="Enter the patience to stop overfitting", type=int, default=20)
 
     parser.add_argument('--operator', help="Enter the desired operator whose eigenvectors will define "
                                            "the gradient maps", type=str, default='Laplacian')
@@ -102,10 +104,10 @@ def main():
     dataset = dataset.shuffle()  # This shuffles the entire dataset in-place
 
     # Define the split points
-    size = 1000
-    test_size = int(0.1*size)
-    val_size = int(0.1*size)
-    train_size = int(0.8*size)
+    size = 1200
+    test_size = int(0.15*size)
+    val_size = int(0.15*size)
+    train_size = int(0.7*size)
 
     dataset_test = dataset[:test_size]
     dataset_val = dataset[test_size:val_size+test_size]
@@ -150,7 +152,8 @@ def main():
                 use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
                 diffusion_type=diff_type,
                 diffusion_param=diff_parameters,
-                k=args.k, n_layers=args.n_layers)
+                k=args.k, n_layers=args.n_layers,
+                output_size=len(args.prop_idx))
     
 
     model = model.to(device)
@@ -158,15 +161,16 @@ def main():
     optimizer = opt.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
     train_QM9(model, optimizer, train_loader, val_loader, prop_idx=args.prop_idx, factor=args.factor, device=device,
-              num_epochs=args.num_epochs, min_lr=args.min_lr, diffusion_operator=diff_operator)
+              num_epochs=args.num_epochs, min_lr=args.min_lr, diffusion_operator=diff_operator,
+              early_stopping_patience=args.patience)
     
     print("Uploading the best model")
 
-    model_ = torch.load('model.pth')
+    model_ = torch.load('model.pth', weights_only=False)
 
-    test_mae = evaluate_network(model_, test_loader, args.prop_idx, args.factor, device)
-    val_mae = evaluate_network(model_, val_loader, args.prop_idx, args.factor, device)
-    train_mae = evaluate_network(model_, train_loader, args.prop_idx, args.factor, device)
+    test_mae = evaluate_network(model_, test_loader, args.prop_idx, args.factor, device, diff_operator)
+    val_mae = evaluate_network(model_, val_loader, args.prop_idx, args.factor, device, diff_operator)
+    train_mae = evaluate_network(model_, train_loader, args.prop_idx, args.factor, device, diff_operator)
 
     print("")
     print("Best Train MAE: {:.4f}".format(train_mae))

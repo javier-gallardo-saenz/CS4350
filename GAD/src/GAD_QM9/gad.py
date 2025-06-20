@@ -17,7 +17,7 @@ class GAD(nn.Module):
     def __init__(self, num_of_node_fts, num_of_edge_fts, hid_dim, atomic_emb, graph_norm, batch_norm, dropout, readout,
                  aggregators, scalers, edge_fts, avg_d, D, device, towers, type_net, residual,
                  use_diffusion, diffusion_type, diffusion_method, diffusion_param, k,
-                 n_layers):
+                 n_layers, output_size):
         super().__init__()
         
         self.hidden_dim    = hid_dim
@@ -68,7 +68,7 @@ class GAD(nn.Module):
                                                k=k) for _ in range(self.n_layers)])
         
 
-        self.readout_MLP = MLP([self.hidden_dim + self.atomic_emb, (self.hidden_dim + self.atomic_emb)//2,  1],
+        self.readout_MLP = MLP([self.hidden_dim + self.atomic_emb, (self.hidden_dim + self.atomic_emb)//2, output_size],
                                dropout=False)
 
 
@@ -96,11 +96,8 @@ class GAD(nn.Module):
             # Note: All arguments to checkpoint.checkpoint must be Tensors that require_grad=True
             # or Tensors that don't require_grad. Non-tensor arguments or Tensors that don't
             # require_grad will be passed directly.
-            # Here, we assume most of these graph-related inputs are not requiring gradients,
-            # but node_fts and edge_fts (if edge_fts=True) likely do.
-            # If any of edge_index, F_norm_edge, etc., *do* require gradients and are small,
-            # it's fine. If they require gradients and are large, you might run into issues.
-            # Usually, graph structure tensors do not require gradients.
+            # Here, most of these graph-related inputs are not requiring gradients,
+            # but node_fts and edge_fts (if edge_fts=True) do.
 
             new_node_fts = checkpoint.checkpoint(
                 conv,
