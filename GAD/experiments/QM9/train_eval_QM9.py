@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import gc
 
 from tqdm import tqdm
 
@@ -106,7 +107,20 @@ def train_epoch(model, data_loader, optimizer, prop_idx, factor, device, loss_fn
             loss.backward()
             optimizer.step()
 
-            epoch_train_mae += loss.item() 
+            epoch_train_mae += loss.item()
+
+            # delete absolutely everything cause i am desperate to make this FUCKING SHIT more memory efficient
+            del out_model
+            del loss
+            del batched_graph  # This is crucial if you moved the entire graph
+            del adj
+            del node_deg_vec
+            del node_deg_mat
+            del lap_mat
+
+            gc.collect()  # Python's garbage collector
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()  # PyTorch's CUDA memory cache
 
         epoch_train_mae /= (idx + 1)
         return factor*epoch_train_mae, optimizer

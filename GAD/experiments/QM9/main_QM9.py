@@ -56,8 +56,8 @@ def main():
     parser.add_argument('--use_batch_norm', help="Enter true if you want to use batch_norm", type=bool, default=True)
     parser.add_argument('--use_residual', help="Enter true if you want to use residual connection", type=bool)
 
-    parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str)
-    parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int)
+    parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str, default='simple')
+    parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int, default=3)
 
     parser.add_argument('--prop_idx', help="Enter the QM9 property index", type=int)
     parser.add_argument('--factor', help="Enter the factor 1000 to convert the QM9 property with Unit eV"
@@ -102,13 +102,14 @@ def main():
     dataset = dataset.shuffle()  # This shuffles the entire dataset in-place
 
     # Define the split points
-    test_size = 500
-    val_size = 500
-    train_size = 2000
+    size = 1000
+    test_size = int(0.1*size)
+    val_size = int(0.1*size)
+    train_size = int(0.8*size)
 
     dataset_test = dataset[:test_size]
     dataset_val = dataset[test_size:val_size+test_size]
-    dataset_train = dataset[val_size:train_size+val_size+test_size]  # All remaining samples
+    dataset_train = dataset[val_size+test_size:train_size+val_size+test_size]  # All remaining samples
 
     print("Dataset loading and splitting complete.")
     print(f"dataset_train contains {len(dataset_train)} samples")
@@ -125,10 +126,14 @@ def main():
     dataset_test = preprocessing_dataset(dataset_test, args.k, operator, **params)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(device)
     
-    train_loader = DataLoader(dataset=dataset_train, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(dataset=dataset_val, batch_size=args.batch_size, shuffle=False)
-    test_loader = DataLoader(dataset=dataset_test, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(dataset=dataset_train, batch_size=args.batch_size, shuffle=True,
+                              num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
+    val_loader = DataLoader(dataset=dataset_val, batch_size=args.batch_size, shuffle=False,
+                            num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
+    test_loader = DataLoader(dataset=dataset_test, batch_size=args.batch_size, shuffle=False,
+                             num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
 
 
     diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
@@ -144,7 +149,7 @@ def main():
                 avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
                 use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
                 diffusion_type=diff_type,
-                diffusion_param=diff_parameters, 
+                diffusion_param=diff_parameters,
                 k=args.k, n_layers=args.n_layers)
     
 
@@ -168,5 +173,8 @@ def main():
     print("Best Val MAE: {:.4f}".format(val_mae))
     print("Best Test MAE: {:.4f}".format(test_mae))
 
-main()
+
+if __name__ == '__main__':
+    main()
+
    
