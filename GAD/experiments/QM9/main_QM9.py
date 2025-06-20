@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../src/")) 
 
 from utils.preprocessing import preprocessing_dataset, average_node_degree
-from utils.operator_preparation import get_operator_and_params
+from utils.operator_preparation import get_operator_and_params, get_diff_operator_and_diff_type
 from train_eval_QM9 import train_epoch, evaluate_network
 from train_QM9 import train_QM9
 from GAD_QM9.gad import GAD
@@ -36,6 +36,16 @@ def main():
     
     parser.add_argument('--use_diffusion', help="Enter the use_diffusion", type=bool)
     parser.add_argument('--diffusion_method', help="Enter the diffusion layer solving scheme ", type=str)
+    parser.add_argument('--diffusion_operator', help="Enter the operator used to perform the initial "
+                                                     "diffusion in each layer", type=str, default='Laplacian')
+    parser.add_argument('--learn_diff', help="Enter whether to learn the parameter alpha of the diffusion operator",
+                        type=bool, default=False)
+    parser.add_argument('--diff_alpha', help="Enter the initial value for the parameter alpha of the diffusion operator",
+                        type=float, default=0.0)
+    parser.add_argument('--diff_gamma_adv', help="Enter the initial value for the advection weight of the diffusion"
+                                            " advection-diffusion operator", type=float, default=0.0)
+    parser.add_argument('--diff_gamma_diff', help="Enter the initial value for the diffusion weight of the "
+                                                  "diffusion advection-diffusion operator", default=0.0, type=float)
     parser.add_argument('--k', help="Enter the num of eigenvector for spectral scheme", type=int)
 
     parser.add_argument('--aggregators', nargs='+', help="Enter the aggregators (space-separated list)", type=str)
@@ -67,6 +77,8 @@ def main():
                         default=0, type=float)
     parser.add_argument('--gamma_diff', help="Enter diffusion weight for advection-diffusion operator",
                         default=0, type=float)
+
+
     
     args = parser.parse_args()
 
@@ -90,12 +102,13 @@ def main():
     dataset = dataset.shuffle()  # This shuffles the entire dataset in-place
 
     # Define the split points
-    test_split_end = 10000
-    val_split_end = 20000
+    test_size = 500
+    val_size = 500
+    train_size = 2000
 
-    dataset_test = dataset[:test_split_end]
-    dataset_val = dataset[test_split_end:val_split_end]
-    dataset_train = dataset[val_split_end:]  # All remaining samples
+    dataset_test = dataset[:test_size]
+    dataset_val = dataset[test_size:val_size+test_size]
+    dataset_train = dataset[val_size:train_size+val_size+test_size]  # All remaining samples
 
     print("Dataset loading and splitting complete.")
     print(f"dataset_train contains {len(dataset_train)} samples")
@@ -117,6 +130,12 @@ def main():
     val_loader = DataLoader(dataset=dataset_val, batch_size=args.batch_size, shuffle=False)
     test_loader = DataLoader(dataset=dataset_test, batch_size=args.batch_size, shuffle=False)
 
+
+    diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
+                                                                                args.diff_alpha,
+                                                                                args.diff_gamma_adv,
+                                                                                args.diff_gamma_diff)
+
     print("create GAD model")
     
     model = GAD(num_of_node_fts=11, num_of_edge_fts=4, hid_dim=args.hid_dim, atomic_emb=args.atomic_emb,
@@ -124,6 +143,8 @@ def main():
                 readout=args.readout, aggregators=args.aggregators, scalers=args.scalers, edge_fts=args.use_edge_fts,
                 avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
                 use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
+                diffusion_type=diff_type,
+                diffusion_param=diff_parameters, 
                 k=args.k, n_layers=args.n_layers)
     
 
@@ -132,7 +153,7 @@ def main():
     optimizer = opt.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
     train_QM9(model, optimizer, train_loader, val_loader, prop_idx=args.prop_idx, factor=args.factor, device=device,
-              num_epochs=args.num_epochs, min_lr=args.min_lr)
+              num_epochs=args.num_epochs, min_lr=args.min_lr, diffusion_operator=diff_operator)
     
     print("Uploading the best model")
 

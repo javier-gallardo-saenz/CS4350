@@ -78,10 +78,10 @@ def main():
     parser.add_argument('--aggregators', help="Enter the aggregators", type = str)
     parser.add_argument('--scalers', help="Enter the scalers", type = str)
 
-    parser.add_argument('--use_edge_fts', help="Enter true if you want to use the edge_fts", type = bool)
-    parser.add_argument('--use_graph_norm', help="Enter true if you want to use graph_norm", type = bool ,default=True)
-    parser.add_argument('--use_batch_norm', help="Enter true if you want to use batch_norm", type = bool ,default=True)
-    parser.add_argument('--use_residual', help="Enter true if you want to use residual connection", type = bool)
+    parser.add_argument('--use_edge_fts', help="Enter true if you want to use the edge_fts", type=bool)
+    parser.add_argument('--use_graph_norm', help="Enter true if you want to use graph_norm", type=bool, default=True)
+    parser.add_argument('--use_batch_norm', help="Enter true if you want to use batch_norm", type=bool, default=True)
+    parser.add_argument('--use_residual', help="Enter true if you want to use residual connection", type=bool)
 
     parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type = str)
     parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int)

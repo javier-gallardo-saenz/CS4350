@@ -10,7 +10,7 @@ if __name__ == "__main__":
         "batch_size":   64,
         "lr":           1e-3,
         "weight_decay": 1e-5,
-        "num_epochs":   200,
+        "num_epochs":   1000,
         "dims":         [11, 64, 64],        #  THIS DOES NOT INCLUDE OUTPUT. OUTPUT SIZE SET BY len(targets)
 
         "degrees":      [1]* 2,                 # must be = to number of hidden layer
