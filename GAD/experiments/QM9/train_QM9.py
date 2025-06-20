@@ -47,4 +47,6 @@ def train_QM9(model, optimizer, train_loader, val_loader, prop_idx, factor, devi
         print("epoch_train_MAE", epoch_train_mae)
         print("epoch_val_MAE", epoch_val_mae)
 
+        torch.cuda.empty_cache()
+
     print("Finish training")

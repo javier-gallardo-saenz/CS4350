@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from torch_scatter import scatter
+import torch.utils.checkpoint as checkpoint
 
 from aggregators import AGGREGATORS
 from mlp import MLP
@@ -10,6 +11,7 @@ from scalers import SCALERS
 from dgn_layer import DGN_layer_Simple, DGN_Tower, DGN_layer_Tower
 
 from gad_layer import GAD_layer
+
 
 class GAD(nn.Module):
     def __init__(self, num_of_node_fts, num_of_edge_fts, hid_dim, atomic_emb, graph_norm, batch_norm, dropout, readout,
@@ -86,8 +88,37 @@ class GAD(nn.Module):
         
         #The GAD layers receive node_fts with shape (#nodes, hid_dim), edge_fts with shape (#edges, hid_dim+atomic_emb)
         for i, conv in enumerate(self.layers):
-            new_node_fts = conv(node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat,
-                                k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
+            # Arguments for the GAD_layer's forward method:
+            # (node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat,
+            #  k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
+
+            # Apply gradient checkpointing
+            # Note: All arguments to checkpoint.checkpoint must be Tensors that require_grad=True
+            # or Tensors that don't require_grad. Non-tensor arguments or Tensors that don't
+            # require_grad will be passed directly.
+            # Here, we assume most of these graph-related inputs are not requiring gradients,
+            # but node_fts and edge_fts (if edge_fts=True) likely do.
+            # If any of edge_index, F_norm_edge, etc., *do* require gradients and are small,
+            # it's fine. If they require gradients and are large, you might run into issues.
+            # Usually, graph structure tensors do not require gradients.
+
+            new_node_fts = checkpoint.checkpoint(
+                conv,
+                node_fts,
+                edge_fts,
+                edge_index,
+                F_norm_edge,
+                F_dig,
+                node_deg_vec,
+                node_deg_mat,
+                lap_mat,
+                k_eig_val,
+                k_eig_vec,
+                num_nodes,
+                norm_n,
+                batch_idx,
+                use_reentrant=False  # Recommended for PyTorch 1.11+
+            )
             node_fts = new_node_fts
 
             
