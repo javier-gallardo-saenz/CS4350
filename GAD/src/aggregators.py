@@ -156,10 +156,13 @@ class aggregate_dir_der(MessagePassing):
         
         self.edge_fts = edge_fts
         self.device = device
+
+        # the hidden dimension here is main_hid_dim + atomic_emb
         if self.edge_fts:
             self.input_dim = 3*hid_dim
         else:
             self.input_dim = 2*hid_dim
+
         self.output_dim = hid_dim
         self.linear = nn.Linear(self.input_dim, self.output_dim).to(self.device)
         
@@ -167,7 +170,7 @@ class aggregate_dir_der(MessagePassing):
         
         edge_index, _ = add_self_loops(edge_index, num_nodes= node_fts.size(0))
         edge_index = edge_index.to(self.device)
-        
+
         if self.edge_fts:
             zero_tensor = torch.zeros((edge_index.shape[1] - edge_fts.shape[0], self.output_dim)).to(self.device)
             new_edge_fts  = torch.cat([edge_fts, zero_tensor])

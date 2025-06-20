@@ -69,7 +69,6 @@ class Diffusion_layer(nn.Module):
 
 
         elif self.method == 'implicit':
-            print("hey")
 
             sig = inspect.signature(operator)
             num_params = len(sig.parameters)

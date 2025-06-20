@@ -10,7 +10,7 @@ from diffusion_layer import Diffusion_layer, Diffusion_layer_DegOperators, Diffu
 
 
 class GAD_layer(nn.Module):
-    def __init__(self, hid_dim, graph_norm, batch_norm, dropout, aggregators, scalers, edge_fts, avg_d, D,
+    def __init__(self, aux_hid_dim, graph_norm, batch_norm, dropout, aggregators, scalers, edge_fts, avg_d, D,
                  device, towers, type_net, residual,
                  use_diffusion, diffusion_type, diffusion_method, diffusion_param, k):
         super().__init__()
@@ -20,11 +20,11 @@ class GAD_layer(nn.Module):
         scalers = [SCALERS[scale] for scale in scalers]
 
         if type_net == 'simple':
-            self.DGN_layer = DGN_layer_Simple(hid_dim=hid_dim, graph_norm=graph_norm, batch_norm=batch_norm,
+            self.DGN_layer = DGN_layer_Simple(aux_hid_dim=aux_hid_dim, graph_norm=graph_norm, batch_norm=batch_norm,
                                               aggregators=aggregators, scalers=scalers, edge_fts=edge_fts,
                                               avg_d=avg_d, D=D, device=device)
         elif type_net == 'tower':
-            self.DGN_layer = DGN_layer_Tower(hid_dim=hid_dim, graph_norm=graph_norm, batch_norm=batch_norm,
+            self.DGN_layer = DGN_layer_Tower(aux_hid_dim=aux_hid_dim, graph_norm=graph_norm, batch_norm=batch_norm,
                                              aggregators=aggregators, scalers=scalers, edge_fts=edge_fts,
                                              avg_d=avg_d, D=D, device=device, towers=towers)
             
@@ -32,21 +32,21 @@ class GAD_layer(nn.Module):
         self.use_diffusion = use_diffusion
         if self.use_diffusion:
             if diffusion_type == "standard":
-                self.diffusion_layer = Diffusion_layer(hid_dim, method=diffusion_method, k=k, device=device)
+                self.diffusion_layer = Diffusion_layer(aux_hid_dim, method=diffusion_method, k=k, device=device)
             elif diffusion_type == "degree_operators":
-                self.diffusion_layer = Diffusion_layer_DegOperators(hid_dim, method=diffusion_method, k=k,
+                self.diffusion_layer = Diffusion_layer_DegOperators(aux_hid_dim, method=diffusion_method, k=k,
                                                                     device=device,
                                                                     alpha_0=diffusion_param['alpha'],
                                                                     gamma_diff_0=diffusion_param['gamma_diff'],
                                                                     gamma_adv_0=diffusion_param['gamma_adv_0'])
             elif diffusion_type == "learnable_degree_operators":
-                self.diffusion_layer = Diffusion_layer_LearnableDegOperators(hid_dim, method=diffusion_method, k=k,
+                self.diffusion_layer = Diffusion_layer_LearnableDegOperators(aux_hid_dim, method=diffusion_method, k=k,
                                                                              device=device,
                                                                              alpha_0=diffusion_param['alpha'],
                                                                              gamma_diff_0=diffusion_param['gamma_diff'],
                                                                              gamma_adv_0=diffusion_param['gamma_adv_0'])
 
-            self.MLP_last = MLP([2*hid_dim, hid_dim], dropout=False)
+            self.MLP_last = MLP([2*aux_hid_dim, aux_hid_dim], dropout=False)
             
         self.residual = residual
 

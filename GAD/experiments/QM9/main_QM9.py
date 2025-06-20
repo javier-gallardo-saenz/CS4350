@@ -56,8 +56,8 @@ def main():
     parser.add_argument('--use_batch_norm', help="Enter true if you want to use batch_norm", type=bool, default=True)
     parser.add_argument('--use_residual', help="Enter true if you want to use residual connection", type=bool)
 
-    parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str)
-    parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int)
+    parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str, default='simple')
+    parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int, default=3)
 
     parser.add_argument('--prop_idx', help="Enter the QM9 property index", type=int)
     parser.add_argument('--factor', help="Enter the factor 1000 to convert the QM9 property with Unit eV"
@@ -144,7 +144,7 @@ def main():
                 avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
                 use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
                 diffusion_type=diff_type,
-                diffusion_param=diff_parameters, 
+                diffusion_param=diff_parameters,
                 k=args.k, n_layers=args.n_layers)
     
 

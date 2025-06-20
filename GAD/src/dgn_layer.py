@@ -9,9 +9,9 @@ from scalers import SCALERS
 ########## DGN Layer Simple ############# 
 
 class DGN_layer_Simple(nn.Module):
-    def __init__(self, hid_dim, graph_norm, batch_norm, aggregators, scalers, edge_fts, avg_d, D, device):
+    def __init__(self, aux_hid_dim, graph_norm, batch_norm, aggregators, scalers, edge_fts, avg_d, D, device):
         super().__init__()
-        self.hid_dim = hid_dim
+        self.aux_hid_dim = aux_hid_dim
         self.graph_norm = graph_norm
         self.batch_norm = batch_norm
         self.scalers = scalers
@@ -22,13 +22,13 @@ class DGN_layer_Simple(nn.Module):
         
         self.aggregators = []
         for agg in aggregators:
-            agg_ = AGGREGATORS[agg](self.edge_fts, self.hid_dim, self.device)
+            agg_ = AGGREGATORS[agg](self.edge_fts, self.aux_hid_dim, self.device)
             self.aggregators.append(agg_)
             
-        self.MLP_last = MLP([((len(self.aggregators)*len(self.scalers)+1))*self.hid_dim, self.hid_dim])
+        self.MLP_last = MLP([((len(self.aggregators)*len(self.scalers)+1))*self.aux_hid_dim, self.aux_hid_dim])
 
         self.relu = nn.ReLU()
-        self.batchnorm_layer = nn.BatchNorm1d(self.hid_dim)
+        self.batchnorm_layer = nn.BatchNorm1d(self.aux_hid_dim)
 
     def forward(self, node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, norm_n):
                 
@@ -58,9 +58,9 @@ class DGN_layer_Simple(nn.Module):
 ########## DGN Tower ############# 
 
 class DGN_Tower(nn.Module):
-    def __init__(self, hid_dim, graph_norm, batch_norm, aggregators, scalers, edge_fts, avg_d, D, device, towers):
+    def __init__(self, aux_hid_dim, graph_norm, batch_norm, aggregators, scalers, edge_fts, avg_d, D, device, towers):
         super().__init__()
-        self.hid_dim = hid_dim
+        self.aux_hid_dim = aux_hid_dim
         self.graph_norm = graph_norm
         self.batch_norm = batch_norm
         self.scalers = scalers
@@ -71,13 +71,13 @@ class DGN_Tower(nn.Module):
 
         self.aggregators = []
         for agg in aggregators:
-            agg_ = AGGREGATORS[agg](self.edge_fts, hid_dim//towers, self.device)
+            agg_ = AGGREGATORS[agg](self.edge_fts, aux_hid_dim//towers, self.device)
             self.aggregators.append(agg_)
 
             
-        self.MLP_last = MLP([((len(self.aggregators)*len(self.scalers)+1))* hid_dim//towers, hid_dim//towers])
+        self.MLP_last = MLP([((len(self.aggregators)*len(self.scalers)+1))* aux_hid_dim//towers, aux_hid_dim//towers])
         
-        self.batchnorm_layer = nn.BatchNorm1d(hid_dim//towers)
+        self.batchnorm_layer = nn.BatchNorm1d(aux_hid_dim//towers)
 
     def forward(self, node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, norm_n):
         
@@ -109,23 +109,23 @@ class DGN_Tower(nn.Module):
 ########## DGN Layer Tower ############# 
 
 class DGN_layer_Tower(nn.Module):
-    def __init__(self, hid_dim, graph_norm, batch_norm, aggregators, scalers, edge_fts, avg_d, D, device, towers):
+    def __init__(self, aux_hid_dim, graph_norm, batch_norm, aggregators, scalers, edge_fts, avg_d, D, device, towers):
         super().__init__()
-        self.hid_dim = hid_dim
+        self.aux_hid_dim = aux_hid_dim
         
-        self.input_tower = hid_dim // towers
-        self.output_tower = hid_dim // towers
+        self.input_tower = aux_hid_dim // towers
+        self.output_tower = aux_hid_dim // towers
         
         self.towers = nn.ModuleList()
         
         for _ in range(towers):
-            self.towers.append(DGN_Tower(hid_dim=hid_dim, graph_norm=graph_norm, batch_norm=batch_norm,
+            self.towers.append(DGN_Tower(aux_hid_dim=aux_hid_dim, graph_norm=graph_norm, batch_norm=batch_norm,
                                          aggregators=aggregators, scalers=scalers, edge_fts=edge_fts,
                                          avg_d=avg_d, D=D, device=device, towers=towers))
     
         self.aggregators = aggregators
             
-        self.MLP_last = MLP([hid_dim, hid_dim])
+        self.MLP_last = MLP([aux_hid_dim, aux_hid_dim])
         
         self.relu = nn.LeakyReLU()
 

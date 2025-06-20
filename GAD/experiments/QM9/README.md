@@ -62,6 +62,12 @@ Here we include the scripts to generate our results on QM9 dataset, including up
     ````
 
 
+***Example Run Command***:
+
+```
+python -m main_QM9 --n_layers=8 --hid_dim=100 --atomic_emb=50 --dropout=0 --readout=mean --use_diffusion=True --diffusion_method=implicit --k=25 --aggregators mean sum max dir_der --scalers identity amplification attenuation --use_edge_fts=True --use_graph_norm=True --use_batch_norm=True --use_residual=True --type_net=simple --towers=5 --prop_idx=0 --factor=1 --num_epochs=300 --batch_size=64 --lr=1e-3 --weight_decay=3e-6 --min_lr=1e-5 --operator=Hub_Laplacian  --alpha=0.5 --gamma_diff=0 --gamma_adv=0 --diffusion_operator=Laplacian --learn_diff=False --diff_alpha=0 --diff_gamma_adv=0 --diff_gamma_diff=0
+```
+
 
 ***To run GAD model on QM9 properties***:
 

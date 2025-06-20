@@ -34,22 +34,29 @@ class GAD(nn.Module):
         self.device        = device
         
         if self.type_net == 'simple':
-            self.edge_dim = self.hidden_dim 
+            self.edge_dim = self.hidden_dim
+            if self.edge_fts:
+                # For each edge, its features are linearly combined into a size(hidden_dim + atomic_emb) vector
+                self.layer_first_edge = nn.Linear(num_of_edge_fts, (self.hidden_dim + self.atomic_emb))
+
         elif self.type_net == 'tower':
             self.edge_dim = (self.hidden_dim + self.atomic_emb) // towers
-   
-        if self.edge_fts:
-            self.layer_first_edge = nn.Linear(num_of_edge_fts, (self.hidden_dim + self.atomic_emb)//towers)
+            if self.edge_fts:
+                self.layer_first_edge = nn.Linear(num_of_edge_fts, (self.hidden_dim + self.atomic_emb) // towers)
+
             
         self.emb_automic = nn.Embedding(10, self.atomic_emb)
-    
+
+        #For each node, its features are linearly combined into a size(hidden_dim) vector
         self.layer_first_node = nn.Linear(num_of_node_fts, self.hidden_dim)
-        
+
+
         self.layer_first = nn.Linear(self.hidden_dim + self.atomic_emb, self.hidden_dim + self.atomic_emb)
         self.layer_last  = nn.Linear(self.hidden_dim + self.atomic_emb, self.hidden_dim + self.atomic_emb)
-        
-        
-        self.layers = nn.ModuleList([GAD_layer(hid_dim=self.hidden_dim + self.atomic_emb, graph_norm=self.graph_norm,
+
+
+        #all GAD layers have hidden dimension = hid_dim + atomic_emb
+        self.layers = nn.ModuleList([GAD_layer(aux_hid_dim=self.hidden_dim + self.atomic_emb, graph_norm=self.graph_norm,
                                                batch_norm=self.batch_norm, dropout=dropout,
                                                aggregators=self.aggregators, scalers=self.scalers,
                                                edge_fts=self.edge_fts, avg_d=self.avg_d, D=D, device=self.device,
@@ -77,7 +84,7 @@ class GAD(nn.Module):
         node_fts = torch.cat((node_fts, automic_num), dim = 1)
         node_fts = self.layer_first(node_fts)
         
-        
+        #The GAD layers receive node_fts with shape (#nodes, hid_dim), edge_fts with shape (#edges, hid_dim+atomic_emb)
         for i, conv in enumerate(self.layers):
             new_node_fts = conv(node_fts, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat,
                                 k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
