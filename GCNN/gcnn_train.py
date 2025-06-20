@@ -67,9 +67,9 @@ def run_experiment(params):
         activations=params["act_fns"],
         gso_generator=params["gso_generator"],
         alpha=params["alpha"],
-        pooling_fn=params.get("pooling_fn", None),
+        learn_alpha= params.get("learn_alpha", True),
+        reduction= params.get("reduction"),
         readout_dims=params.get("readout_dims", None),
-        apply_pooling=params.get("apply_pooling", True),
         apply_readout=params.get("apply_readout", True),
     ).to(device)
 

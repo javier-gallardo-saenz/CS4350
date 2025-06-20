@@ -44,47 +44,47 @@ class GCNNalpha(nn.Module):
         dims: list,
         output_dim: int,
         degrees: list,
-        activations: list, # Changed to list to hold activation functions for each layer
+        activations: list,
         gso_generator: callable,
         alpha: float = 0.5,
-        pooling_fn=None,
+        learn_alpha: bool = True,  # Add this parameter
+        reduction: str = 'max',
         readout_dims=None,
-        apply_pooling: bool = True,
         apply_readout: bool = True
     ):
         super().__init__()
 
-        self.pooling_fn = pooling_fn
-        self.apply_pooling = apply_pooling
+        self.reduction = reduction
         self.apply_readout = apply_readout
 
-        self.alpha = nn.Parameter(torch.tensor(alpha, dtype=torch.float32))
+        self.learn_alpha = learn_alpha
+        if learn_alpha:
+            self.alpha = nn.Parameter(torch.tensor(alpha, dtype=torch.float32))
+        else:
+            self.register_buffer('alpha', torch.tensor(alpha, dtype=torch.float32))  # Non-trainable
+
         self.gso_generator = gso_generator
 
-        # layers
         self.layers = nn.ModuleList()
-        # Store degrees and activations separately since they are not nn.Module
         self.layer_degrees = []
 
         for i in range(len(dims) - 1):
             in_dim = dims[i]
             out_dim = dims[i + 1]
             degree = degrees[i]
-            activation_fn = activations[i] # Get the specific activation for this layer
+            activation_fn = activations[i]
 
-            # Pass activation to ConvLayer so it handles it internally
             conv_layer = ConvLayer(in_dim, out_dim, [torch.eye(1)] * (degree + 1), activation=activation_fn)
             self.layers.append(conv_layer)
             self.layer_degrees.append(degree)
 
-        # readout MLP
         if readout_dims is not None:
             self.readout = MLP([dims[-1]] + readout_dims)
         else:
             self.readout = None
 
-        # default linear output mapping
         self.output_lin = nn.Linear(dims[-1], output_dim, bias=True)
+
 
     def forward(self, X, batch, edge_index):
         adj = to_dense_adj(edge_index, batch)
@@ -105,12 +105,7 @@ class GCNNalpha(nn.Module):
             conv_layer.filters = filters
             x = conv_layer(x)
 
-        if self.apply_pooling:
-            if self.pooling_fn is not None:
-                x = self.pooling_fn(x, batch)
-            else:
-                from torch_geometric.nn import global_mean_pool
-                x = global_mean_pool(x, batch)
+        x = torch.scatter(x, batch, dim=0, reduce=self.reduction) # perform pooling
 
         # apply readout or default linear mapping to output_dim
         if self.apply_readout:
