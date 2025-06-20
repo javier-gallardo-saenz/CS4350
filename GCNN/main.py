@@ -11,12 +11,12 @@ if __name__ == "__main__":
         "batch_size":   64,
         "lr":           1e-3,
         "weight_decay": 1e-5,
-        "num_epochs":   200,
+        "num_epochs":   1000,
         "dims":         [11, 64, 64],        #  THIS DOES NOT INCLUDE OUTPUT. OUTPUT SIZE SET BY len(targets)
 
         "degrees":      [1]* 2,                 # must be = to number of hidden layer
         "act_fns":      [ReLU()]* 2,            # must be = to number of hidden layer
-        "alpha":        0.5,                    # alpha to initialize GSO
+        "alpha":        0.9,                    # alpha to initialize GSO
         "readout_dims": [64, 3],               # first dimension must match last of the hidden layer
         "apply_pooling":  True,
         "apply_readout": True,

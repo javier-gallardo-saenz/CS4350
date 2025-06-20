@@ -5,7 +5,8 @@ from tqdm import tqdm
 
 from torch_geometric.utils import to_dense_adj, get_laplacian
 
-def evaluate_network(model, data_loader, prop_idx, factor, device):
+
+def evaluate_network(model, data_loader, prop_idx, factor, device, diffusion_operator):
 
     model.eval()
     
@@ -18,17 +19,16 @@ def evaluate_network(model, data_loader, prop_idx, factor, device):
 
         for idx, batched_graph in tqdm(enumerate(data_loader)):
 
-            
-            
             num_nodes = batched_graph.num_nodes
             adj = to_dense_adj(batched_graph.edge_index, max_num_nodes = num_nodes)[0].to(device)
             node_deg_vec = adj.sum(axis=1, keepdim=True).to(device)
             
             node_deg_mat = torch.diag(node_deg_vec[:, 0]).to(device)
 
-            lap_mat_sparse = get_laplacian(batched_graph.edge_index)
-            lap_mat = to_dense_adj(edge_index = lap_mat_sparse[0], edge_attr = lap_mat_sparse[1], max_num_nodes = num_nodes)[0].to(device)
-   
+            # lap_mat_sparse = get_laplacian(batched_graph.edge_index)
+            # lap_mat = to_dense_adj(edge_index = lap_mat_sparse[0], edge_attr = lap_mat_sparse[1], max_num_nodes = num_nodes)[0].to(device)
+            lap_mat = diffusion_operator(adj)
+
             F_norm_edge = batched_graph.F_norm_edge.to(device)
             F_dig = batched_graph.F_dig.to(device)
             
@@ -46,7 +46,8 @@ def evaluate_network(model, data_loader, prop_idx, factor, device):
             k_eig_val = batched_graph.k_eig_val.to(device)
             k_eig_vec = batched_graph.k_eig_vec.to(device)
      
-            out_model = model(node_fts, automic_num, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat, lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
+            out_model = model(node_fts, automic_num, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec,
+                              node_deg_mat, lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
         
             loss = loss_fn(out_model, batched_graph.y[:, prop_idx].to(device))
 
@@ -58,7 +59,7 @@ def evaluate_network(model, data_loader, prop_idx, factor, device):
     return factor*epoch_test_mae
 
 
-def train_epoch(model ,data_loader, optimizer, prop_idx, factor, device, loss_fn):
+def train_epoch(model, data_loader, optimizer, prop_idx, factor, device, loss_fn, diffusion_operator):
     
         epoch_train_mae = 0
 
@@ -76,9 +77,9 @@ def train_epoch(model ,data_loader, optimizer, prop_idx, factor, device, loss_fn
             node_deg_mat = torch.diag(node_deg_vec[:, 0]).to(device)
 
             
-            lap_mat_sparse = get_laplacian(batched_graph.edge_index)
-            lap_mat = to_dense_adj(edge_index=lap_mat_sparse[0], edge_attr=lap_mat_sparse[1], max_num_nodes=num_nodes)[0].to(device)
-
+            # lap_mat_sparse = get_laplacian(batched_graph.edge_index)
+            # lap_mat = to_dense_adj(edge_index=lap_mat_sparse[0], edge_attr=lap_mat_sparse[1], max_num_nodes=num_nodes)[0].to(device)
+            lap_mat = diffusion_operator(adj)
         
             F_norm_edge = batched_graph.F_norm_edge.to(device)
             F_dig = batched_graph.F_dig.to(device)

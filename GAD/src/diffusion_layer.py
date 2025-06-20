@@ -1,12 +1,12 @@
-
 import torch
 import torch.nn as nn
 import inspect
 
+
 # Helper function
 
 def get_mask(k, batch_num_nodes, num_nodes, device):
-    mask = torch.zeros(num_nodes, k*len(batch_num_nodes)).to(device)
+    mask = torch.zeros(num_nodes, k * len(batch_num_nodes)).to(device)
     partial_n = 0
     partial_k = 0
     for n in batch_num_nodes:
@@ -14,6 +14,7 @@ def get_mask(k, batch_num_nodes, num_nodes, device):
         partial_n = partial_n + n
         partial_k = partial_k + k
     return mask
+
 
 #-----------------------------------------------
 # Diffusion Layer from DAG, d/dt X = D^{1}LX
@@ -30,12 +31,11 @@ class Diffusion_layer(nn.Module):
         self.device = device
         self.relu = nn.LeakyReLU()
 
-        self.diffusion_time = nn.Parameter(torch.Tensor(self.width)) # num_channels
+        self.diffusion_time = nn.Parameter(torch.Tensor(self.width))  # num_channels
 
         nn.init.constant_(self.diffusion_time, 0.0)
 
     def forward(self, node_fts, node_deg_vec, node_deg_mat, operator, k_eig_val, k_eig_vec, num_nodes, batch_idx):
-
 
         with torch.no_grad():
 
@@ -44,13 +44,13 @@ class Diffusion_layer(nn.Module):
         if self.method == 'spectral':
 
             _, indices_of_each_graph = torch.unique(batch_idx, return_counts=True)
-            
+
             indices_of_each_graph = indices_of_each_graph.to(self.device)
 
             batch_size = indices_of_each_graph.shape[0]
 
             mask = get_mask(self.k, indices_of_each_graph.tolist(), num_nodes, self.device)
-            
+
             k_eig_vec_ = k_eig_vec.repeat(1, batch_size)
 
             k_eig_vec_ = k_eig_vec_ * mask
@@ -65,18 +65,27 @@ class Diffusion_layer(nn.Module):
 
             x_diffuse_spec = diffusion_coefs * x_spec
 
-            x_diffuse      = torch.matmul(k_eig_vec_, x_diffuse_spec)
+            x_diffuse = torch.matmul(k_eig_vec_, x_diffuse_spec)
 
 
         elif self.method == 'implicit':
-                
+            print("hey")
 
-            mat_ = operator.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
+            sig = inspect.signature(operator)
+            num_params = len(sig.parameters)
+
+            if num_params == 1:
+                # If the operator takes one argument, it must be alpha
+                mat_ = operator(0.0)
+            else:
+                raise ValueError(
+                    "The Laplacian must take 1 argument (alpha)")
+
+            mat_ = mat_.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
 
             mat_ *= self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
 
             mat_ += node_deg_mat.unsqueeze(0)
-
 
             cholesky_factors = torch.linalg.cholesky(mat_)
 
@@ -84,16 +93,16 @@ class Diffusion_layer(nn.Module):
 
             cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
 
-
             final_sol = torch.cholesky_solve(cholesky_decomp_T, cholesky_factors)
 
             x_diffuse = torch.transpose(final_sol.squeeze(-1), 0, 1)
 
+        else:
+            raise ValueError(f"Unknown diffusion method: {self.method}. Expected 'spectral' or 'implicit'.")
 
         x_diffuse = self.relu(x_diffuse)
 
         return x_diffuse
-
 
 
 #----------------------------------------------------------------------------------------------------
@@ -104,7 +113,7 @@ class Diffusion_layer(nn.Module):
 
 class Diffusion_layer_DegOperators(nn.Module):
 
-    def __init__(self, width, method, k, device):
+    def __init__(self, width, method, k, device, alpha_0, gamma_diff_0, gamma_adv_0):
         super().__init__()
 
         self.width = width
@@ -112,6 +121,9 @@ class Diffusion_layer_DegOperators(nn.Module):
         self.k = k
         self.device = device
         self.relu = nn.LeakyReLU()
+        self.alpha = alpha_0
+        self.gamma_diff = gamma_diff_0
+        self.gamma_adv = gamma_adv_0
 
         self.diffusion_time = nn.Parameter(torch.Tensor(self.width))  # num_channels
 
@@ -123,19 +135,44 @@ class Diffusion_layer_DegOperators(nn.Module):
 
             self.diffusion_time.data = torch.clamp(self.diffusion_time, min=1e-8)
 
-        mat_ = operator.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
+        sig = inspect.signature(operator)
+        num_params = len(sig.parameters)
 
-        mat_ *= self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
+        if num_params == 1:
+            # If the operator takes one argument, it must be alpha
+            mat_ = operator(self.alpha)
+        elif num_params == 3:
+            # If the operator takes three arguments, they must be gamma_adv, gamma_diff, alpha
+            mat_ = operator(self.gamma_adv, self.gamma_diff, self.alpha)
+        else:
+            raise ValueError(
+                "The operator function must take either 1 argument (alpha) or "
+                "3 arguments (gamma_adv, gamma_diff, alpha).")
 
-        cholesky_factors = torch.linalg.cholesky(mat_)
+        # Construct the matrix A = (I - dt * L)
+        # mat_ is L, self.diffusion_time is dt
+        # Identity matrix: (num_nodes, num_nodes)
+        identity_matrix = torch.eye(num_nodes, device=self.device)
 
-        cholesky_decomp = node_fts * node_deg_vec
+        # Scale mat_ by diffusion_time
+        scaled_L = self.diffusion_time * mat_
 
-        cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
+        # A = (I + dt * L)
+        A = identity_matrix + scaled_L  # (num_nodes, num_nodes)
 
-        final_sol = torch.cholesky_solve(cholesky_decomp_T, cholesky_factors)
+        # Reshape node_fts from (B, N, W) to (B * W, N, 1) or (B * W, N)
+        # Reshape A from (N, N) to (B * W, N, N) (by expanding)
 
-        x_diffuse = torch.transpose(final_sol.squeeze(-1), 0, 1)
+        A_expanded_for_features = A.unsqueeze(0).expand(self.width, -1, -1)  # (width, num_nodes, num_nodes)
+        A_final = A_expanded_for_features.unsqueeze(0).expand(batch_idx.max() + 1, -1, -1, -1).reshape(-1, num_nodes,
+                                                                                                       num_nodes)
+                                                                                                         # (B*W, N, N)
+        # Right-hand side: node_fts (B, N, W) -> (B * W, N, 1)
+        rhs = node_fts.permute(0, 2, 1).reshape(-1, num_nodes, 1)  # (B*W, N, 1)
+
+        Solved_x = torch.linalg.solve(A_final, rhs)  # (B*W, N, 1)
+        # Reshape back to (B, N, W)
+        x_diffuse = Solved_x.squeeze(-1).reshape(batch_idx.max() + 1, self.width, num_nodes).permute(0, 2, 1)
 
         x_diffuse = self.relu(x_diffuse)
 
@@ -150,7 +187,7 @@ class Diffusion_layer_DegOperators(nn.Module):
 
 class Diffusion_layer_LearnableDegOperators(nn.Module):
 
-    def __init__(self, width, method, k, device):
+    def __init__(self, width, method, k, device, alpha_0, gamma_diff_0, gamma_adv_0):
         super().__init__()
 
         self.width = width
@@ -165,21 +202,29 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
         self.alpha = nn.Parameter(torch.Tensor(1))
 
         nn.init.constant_(self.diffusion_time, 0.0)
-        nn.init.constant_(self.gamma_adv, 0.5)
-        nn.init.constant_(self.gamma_diff, 0.5)
-        nn.init.constant_(self.alpha, 0.0)
+        nn.init.constant_(self.gamma_adv, gamma_diff_0)
+        nn.init.constant_(self.gamma_diff, gamma_adv_0)
+        nn.init.constant_(self.alpha, alpha_0)
 
     def forward(self, node_fts, node_deg_vec, node_deg_mat, operator, k_eig_val, k_eig_vec, num_nodes, batch_idx):
-        #make sure operator is a function
         sig = inspect.signature(operator)
-        if len(sig.parameters) != 3:
-            raise ValueError("The operator function must take exactly 3 arguments: gamma_adv, gamma_diff, alpha.")
+        num_params = len(sig.parameters)
+
+        if num_params == 1:
+            # If the operator takes one argument, it must be alpha
+            mat_ = operator(self.alpha)
+        elif num_params == 3:
+            # If the operator takes three arguments, they must be gamma_adv, gamma_diff, alpha
+            mat_ = operator(self.gamma_adv, self.gamma_diff, self.alpha)
+        else:
+            raise ValueError(
+                "The operator function must take either 1 argument (alpha) or"
+                " 3 arguments (gamma_adv, gamma_diff, alpha).")
 
         with torch.no_grad():
-
             self.diffusion_time.data = torch.clamp(self.diffusion_time, min=1e-8)
 
-        mat_ = operator(self.gamma_adv, self.gamma_diff, self.alpha).unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
+        mat_ = mat_.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
 
         mat_ *= self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
 

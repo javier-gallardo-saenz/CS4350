@@ -154,7 +154,7 @@ def preprocessing_dataset(
     → returns list of torch_geometric.data.Data
     """
     out: List[Data] = []
-    for g in dataset:
+    for g in tqdm(dataset, desc="Processing eigenmaps of the dataset graphs"):
         d = process_single_graph(
             g, num_of_eigenvectors, laplacian_fn, **laplacian_kwargs
         )
@@ -177,7 +177,7 @@ processed_dataset = preprocessing_dataset(
 def average_node_degree(dataset):
     D = []
 
-    for i in tqdm(range(len(dataset)), desc="Processing dataset"):
+    for i in tqdm(range(len(dataset)), desc="Processing average_node_degree of the dataset"):
         adj = to_dense_adj(dataset[i].edge_index)[0]
 
         deg = adj.sum(axis=1, keepdim=True)  # Degree of nodes, shape [N, 1]

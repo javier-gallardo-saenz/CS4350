@@ -14,7 +14,8 @@ from gad_layer import GAD_layer
 class GAD(nn.Module):
     def __init__(self, num_of_node_fts, num_of_edge_fts, hid_dim, atomic_emb, graph_norm, batch_norm, dropout, readout,
                  aggregators, scalers, edge_fts, avg_d, D, device, towers, type_net, residual,
-                 use_diffusion, diffusion_type, diffusion_method, k, n_layers):
+                 use_diffusion, diffusion_type, diffusion_method, diffusion_param, k,
+                 n_layers):
         super().__init__()
         
         self.hidden_dim    = hid_dim
@@ -54,7 +55,8 @@ class GAD(nn.Module):
                                                edge_fts=self.edge_fts, avg_d=self.avg_d, D=D, device=self.device,
                                                towers=towers, type_net=self.type_net, residual=self.residual,
                                                use_diffusion=use_diffusion, diffusion_type=diffusion_type,
-                                               diffusion_method=diffusion_method, k=k) for _ in range(self.n_layers)])
+                                               diffusion_method=diffusion_method, diffusion_param=diffusion_param,
+                                               k=k) for _ in range(self.n_layers)])
         
 
         self.readout_MLP = MLP([self.hidden_dim + self.atomic_emb, (self.hidden_dim + self.atomic_emb)//2,  1],

@@ -5,18 +5,62 @@ Here we include the scripts to generate our results on QM9 dataset, including up
 
 -> Laplacian: 
     ```
-    --operator='Laplacian'
+    --operator=Laplacian
     ```
 
 -> Hubs Laplacian:
     ````
-    --operator="Hub_Laplacian'  --alpha=0.5 
+    --operator=Hub_Laplacian  --alpha=0.5 
     ````
 
 -> Hubs Advection-Diffusion Operator:
     ````
-    --operator="Hub_Advection_Diffusion' --alpha=0.5 --gamma_adv=0.5 --gamma_diff=0.5 (example)
+    --operator=Hub_Advection_Diffusion --alpha=0.5 --gamma_adv=0.5 --gamma_diff=0.5 (example)
     ````
+
+
+***To control the diffusion step***:
+
+-> Diffusion Operators:
+    ````
+    --diff_operator=Laplacian 
+    ````
+    available: Laplacian, Hub_Laplacian, Hub_Advection_Diffusion
+
+-> Diffusion methods:
+    ````
+    --diffusion_method=implicit 
+    ````
+    available:implicit, spectral 
+    Note that if one uses Hub_Laplacian or Hub_Advection_Diffusion this value will automatically be overwritten to implicit
+
+-> Diffusion parameter learning:
+    ```
+    --learn_dif=True 
+    ```
+    available:True/False
+    Note that if this is set to True the diffusion method is automatically overwritten to implicit
+
+-> Alpha parameter for diffusion:
+    ````
+    --diff_alpha=0.5
+    ````
+
+-> Advection gamma parameter for diffusion:
+    ````
+    --diff_gamma_adv=0.5
+    ````
+
+-> Diffusion gamma parameter for diffusion:
+    ```
+    --diff_gamma_diff=0.5
+    ```
+
+-> Number of eigenvectors to be used in spectral scheme:
+    ````
+    --k=10
+    ````
+
 
 
 ***To run GAD model on QM9 properties***:
