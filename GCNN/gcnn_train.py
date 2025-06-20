@@ -77,7 +77,7 @@ def run_experiment(params):
         gso_generator=params["gso_generator"],
         alpha=params["alpha"],
         learn_alpha= params.get("learn_alpha", True),
-        reduction= params.get("reduction"),
+        reduction= params.get("pooling"),
         readout_dims=params.get("readout_dims", None),
         apply_readout=params.get("apply_readout", True),
     ).to(device)
@@ -94,6 +94,7 @@ def run_experiment(params):
     train_mae_history = []
     val_mean_mae_history = []
     val_per_target_mae_history = [] # New list to store per-target MAE
+    alphas_history = []
 
     for epoch in tqdm(range(1, params["num_epochs"] + 1)):
         train_mae = train_epoch(model, train_loader, optimizer, loss_fn, device)
@@ -106,17 +107,19 @@ def run_experiment(params):
         val_mean_mae_history.append(val_mean_mae)
         val_per_target_mae_history.append(val_per_target_mae.tolist()) # Store the per-target MAE as list
 
+        if isinstance(model.alpha, torch.Tensor) and model.alpha.numel() == 1:
+            alpha = model.alpha.item()
+        else:
+            alpha = model.alpha
+
+        alphas_history.append(alpha)
+
         if val_mean_mae < best_val_mean_mae:
             best_val_mean_mae = val_mean_mae
             best_state = model.state_dict() # Capture the state dict of the best model
 
         if epoch % 10 == 0 or epoch == params["num_epochs"]:
-            print(f"Epoch {epoch}/{params['num_epochs']} | Train MAE: {train_mae:.4f} | Val MAE (mean): {val_mean_mae:.4f} | Val MAE (per target): {val_per_target_mae}")
-            # Ensure alpha is a scalar before trying to call .item()
-            if isinstance(model.alpha, torch.Tensor) and model.alpha.numel() == 1:
-                print(f"Alpha: {model.alpha.item():.4f}")
-            else:
-                print(f"Alpha: {model.alpha}") # If alpha is not a single tensor, print directly
+            print(f"Epoch {epoch}/{params['num_epochs']} | Train MAE: {train_mae:.4f} | Val MAE (per target): {val_per_target_mae} | alpha: {alpha}")
             
     # test
     if best_state is not None:
@@ -129,4 +132,4 @@ def run_experiment(params):
 
     # Call the new function to save all results
 
-    return best_val_mean_mae, test_per_target_mae, val_per_target_mae_history 
+    return best_val_mean_mae, test_per_target_mae, val_per_target_mae_history, alphas_history

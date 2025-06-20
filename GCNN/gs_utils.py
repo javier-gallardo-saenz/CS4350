@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import torch
-import json 
+import matplotlib.pyplot as plt 
 import random 
 import string
 
@@ -75,3 +75,62 @@ def save_experiment_results(run_id, save_dir, params, best_val_mean_mae,
         val_history_csv_path = os.path.join(save_dir, f"{run_id}_val_per_target_mae_history.csv")
         val_history_df.to_csv(val_history_csv_path, index=False)
         print(f"Validation per-target MAE history saved to {val_history_csv_path}")
+
+def plot_val_mae_per_target(val_per_target_mae_history, run_id, save_dir="grid_search_results"):
+    """
+    Plots and saves per-target validation MAE curves.
+
+    Args:
+        val_per_target_mae_history (list of lists): Each entry is a list of per-target MAEs for that epoch.
+        run_id (str): Unique identifier for the run.
+        save_dir (str): Directory to save the plot.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    epochs = list(range(1, len(val_per_target_mae_history) + 1))
+    val_per_target_mae_array = list(map(list, zip(*val_per_target_mae_history)))  # Transpose: targets x epochs
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot each target’s validation MAE
+    for idx, target_mae in enumerate(val_per_target_mae_array):
+        plt.plot(epochs, target_mae, label=f"Val MAE - Target {idx}")
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Validation MAE")
+    plt.title(f"Validation MAE per Target (Run {run_id})")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    plot_path = os.path.join(save_dir, f"loss_{run_id}.png")
+    plt.savefig(plot_path)
+    plt.close()
+
+
+def plot_alphas_history(alphas_history, run_id, save_dir="grid_search_results"):
+    """
+    Plots and saves per-target validation MAE curves.
+
+    Args:
+        val_per_target_mae_history (list of lists): Each entry is a list of per-target MAEs for that epoch.
+        run_id (str): Unique identifier for the run.
+        save_dir (str): Directory to save the plot.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    epochs = list(range(1, len(alphas_history) + 1))
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot each target’s validation MAE
+    plt.plot(epochs, alphas_history)
+
+    plt.xlabel("Epoch")
+    plt.ylabel("alpha")
+    plt.title(f"alpha (Run {run_id})")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    plot_path = os.path.join(save_dir, f"alpha_{run_id}.png")
+    plt.savefig(plot_path)
+    plt.close()

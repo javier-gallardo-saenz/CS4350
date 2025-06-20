@@ -6,7 +6,7 @@ from gcnn_train import run_experiment
 import itertools
 import os
 import pandas as pd
-from gs_utils import generate_run_id
+from gs_utils import generate_run_id, plot_val_mae_per_target, plot_alphas_history
 
 # --------------------
 # 1. DEFAULT PARAMS
@@ -17,15 +17,15 @@ DEFAULT_PARAMS = {
     "batch_size": 64,
     "lr": 1e-3,
     "weight_decay": 1e-5,
-    "alpha": 0.1,
-    "num_epochs": 10,                 # reduced for quick grid search
-    "dims": [11, 64, 64],             # hidden dims only
-    "degrees": [1, 1],                # poly degree per conv layer
-    "act_fns": [Tanh(), Tanh()],
+    "alpha": 0.0,
+    "num_epochs": 300,                 
+    "dims": [150, 64, 64, 64],             # input + hidden dims only
+    "degrees": [1]*3,               # poly degree per conv layer
+    "act_fns": [Tanh()]* 3,
     "readout_dims": [64, 3],          # last must match len(targets)
-    "reduction": "sum",
+    "pooling": "sum",
     "apply_readout": True,
-    "learn_alpha": True,
+    "learn_alpha": False,
     "gso_generator": hub_laplacian,   # default graph shift op
 }
 
@@ -33,8 +33,10 @@ DEFAULT_PARAMS = {
 # 2. GRID SEARCH SPACE
 # --------------------
 GRID_PARAMS = {
-  "lr": [1e-3, 5e-4],
-  "weight_decay": [1e-5, 1e-6],
+    "num_epochs": [500, 1000],
+    "act_fns": [[Tanh()]*3 , [ReLU()]* 3],
+    "pooling": ["sum", "max", "mean"],
+    "alpha": [0, 0.5, -0.5]
 }
 
 
@@ -44,7 +46,7 @@ grid = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
 # --------------------
 # 3. OUTPUT SETUP
 # --------------------
-RESULTS_DIR = "grid_search_results"
+RESULTS_DIR = "GCNN/grid_search_results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 CSV_PATH = os.path.join(RESULTS_DIR, "grid_search_summary.csv")
 
@@ -66,8 +68,10 @@ for idx, grid_params in enumerate(grid, start=1):
         print(f"  {k}: {name}")
 
     # execute
-    best_val_mean_mae, final_test_per_target_mae, _ = run_experiment(config)
-
+    best_val_mean_mae, final_test_per_target_mae, val_per_target_mae_history, alphas_history = run_experiment(config)
+    plot_val_mae_per_target(val_per_target_mae_history, run_id)
+    plot_alphas_history(alphas_history, run_id)
+    
     # collect results
     row = {
         "run_id": run_id,
