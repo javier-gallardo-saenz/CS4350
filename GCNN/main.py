@@ -19,8 +19,8 @@ DEFAULT_PARAMS = {
     "lr": 1e-3,
     "alpha_lr": 1e-2,
     "weight_decay": 1e-4,
-    "alpha": 0.0,
-    "num_epochs": 300,
+    "alpha": 0.5,
+    "num_epochs": 250,
     "dims": [11, 128, 128],
     "hops": 2,
     "act_fn": ReLU(),
@@ -31,7 +31,7 @@ DEFAULT_PARAMS = {
     "gso_generator": hub_laplacian,
     "use_bn": True,
     "dropout_p": 0.2,
-    "patience": 50
+    "patience": 25
 }
 
 GRID_PARAMS = {
@@ -48,7 +48,7 @@ grid = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
 # -----------------------
 # 2. Prepare Result Paths
 # -----------------------
-TOP_RESULTS_DIR = "results"
+TOP_RESULTS_DIR = "GCNN/results"
 os.makedirs(TOP_RESULTS_DIR, exist_ok=True)
 
 SUMMARY_CSV = os.path.join(TOP_RESULTS_DIR, "summary.csv")
@@ -76,13 +76,6 @@ for idx, grid_params in enumerate(grid, start=1):
     run_dir = os.path.join(TOP_RESULTS_DIR, run_id)
     os.makedirs(run_dir, exist_ok=True)
 
-    # --- Execute ---
-    # Let run_experiment return the trained model and histories too:
-    #   model,
-    #   best_val_mae,
-    #   test_per_target_mae,
-    #   val_per_target_mae_history,
-    #   alphas_history
     model, best_val_mean_mae, test_per_target_mae, val_per_target_mae_history, alphas_history = run_experiment(config)
 
     # --- Save model weights ---

@@ -56,11 +56,6 @@ def eval_epoch(model, data_loader, params, device, tag='Val'):
 
 
 def run_experiment(params):
-    run_id = generate_run_id(length=4)
-    
-    # Define save directory
-    save_dir = "results"
-    os.makedirs(save_dir, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -100,7 +95,7 @@ def run_experiment(params):
          'weight_decay': 0.0} 
     ])
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                     patience=10, factor=0.5, verbose=True)
+                                                    patience=10, factor=0.5, verbose=True)
     loss_fn = nn.L1Loss()
 
     best_val_mean_mae = float('inf')
@@ -142,7 +137,7 @@ def run_experiment(params):
             print(f"Early stopping triggered after {epoch} epochs (no improvement for {patience} epochs).")
             break 
 
-        if epoch % 50 == 0 or epoch == params["num_epochs"]:
+        if epoch % 10 == 0 or epoch == params["num_epochs"]:
             print(f"Epoch {epoch}/{params['num_epochs']} | Train MAE: {train_mae:.4f} | Val MAE (per target): {val_per_target_mae} | alpha: {alpha}")
             
     # test
@@ -154,6 +149,6 @@ def run_experiment(params):
     print(f"Final Test MAE (mean): {test_per_target_mae.mean():.4f}")
     print(f"Final Test MAE (per target): {test_per_target_mae}")
 
-    save_experiment_results(run_id, save_dir, params, best_val_mean_mae, test_per_target_mae, val_per_target_mae_history)
+    #save_experiment_results(run_id, save_dir, params, best_val_mean_mae, test_per_target_mae, val_per_target_mae_history)
 
-    return best_val_mean_mae, test_per_target_mae, val_per_target_mae_history, alphas_history
+    return model, best_val_mean_mae, test_per_target_mae, val_per_target_mae_history, alphas_history
