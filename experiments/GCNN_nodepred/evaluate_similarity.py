@@ -21,7 +21,7 @@ def plot_similarity_heatmap(sim_matrix, title="Cosine Similarity Matrix"):
     plt.tight_layout()
     plt.show()
 
-def plot_avg_similarity(avg_cos_sims):
+def plot_avg_similarity(avg_cos_sims, title=None):
     """
     Plots average cosine similarity per layer.
 
@@ -33,29 +33,35 @@ def plot_avg_similarity(avg_cos_sims):
     plt.plot(layers, avg_cos_sims, marker='o', linestyle='-')
     plt.xlabel("Layer")
     plt.ylabel("Average Cosine Similarity")
-    plt.title("Average Pairwise Cosine Similarity per Layer")
+    if title:
+        plt.title(title)
+    else:
+        plt.title("Average Pairwise Cosine Similarity per Layer")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
-def eval_cos_sim_per_layer(embeddings_per_layer, mask=None):
+def eval_cos_sim_per_layer(embeddings_per_layer, labels):
     """
     Computes the average pairwise cosine similarity for each layer of node embeddings.
 
     Args:
         embeddings_per_layer (List[Tensor]): List of tensors [N x D] from each GNN layer.
-        mask (Tensor, optional): Boolean tensor [N] indicating which nodes to include 
-                                 (e.g., train/test/val mask). If None, all nodes are used.
+        labels (Tensor, optional): Tensor [N] with node labels (either predicted or true).
 
     Returns:
-        List[float]: Average cosine similarity per layer.
+        List[Tensor]: List of cosine similarity matrices for each layer.
+        List[float]: Average overall cosine similarity per layer.
+        List[float]: Average intra-class cosine similarity per layer.
+        List[float]: Average inter-class cosine similarity per layer.
+
     """
     avg_cos_sims = []
     sim_matrices = []
+    avg_inter_class_sims = []
+    avg_intra_class_sims = []
 
     for emb in embeddings_per_layer:
-        if mask is not None:
-            emb = emb[mask]  # Select only the masked nodes
 
         # Normalize embeddings
         emb = F.normalize(emb, p=2, dim=1)  # [N x D]
@@ -76,4 +82,15 @@ def eval_cos_sim_per_layer(embeddings_per_layer, mask=None):
         avg_cos_sims.append(avg_cos)
         sim_matrices.append(sim_matrix)
 
-    return sim_matrices, avg_cos_sims
+        # Masks for class-based comparisons
+        label_equal = labels.unsqueeze(0) == labels.unsqueeze(1)  # Shape: [N, N]
+        triu_mask = torch.triu(torch.ones(num_nodes, num_nodes, dtype=torch.bool), diagonal=1)
+        intra_mask = label_equal & ~torch.eye(num_nodes, dtype=torch.bool) & triu_mask
+        inter_mask = ~label_equal & triu_mask
+
+        intra_similarity = sim_matrix[intra_mask].mean().item()
+        inter_similarity = sim_matrix[inter_mask].mean().item()
+        avg_inter_class_sims.append(inter_similarity)
+        avg_intra_class_sims.append(intra_similarity)
+
+    return sim_matrices, avg_cos_sims, avg_intra_class_sims, avg_inter_class_sims

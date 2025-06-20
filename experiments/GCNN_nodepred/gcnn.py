@@ -54,7 +54,8 @@ class GCNNalpha(nn.Module):
 
         self.apply_readout = apply_readout
 
-        self.alpha = nn.Parameter(torch.tensor(alpha, dtype=torch.float32))
+        #self.alpha = nn.Parameter(torch.tensor(alpha, dtype=torch.float32))
+        self.alpha = alpha
         self.gso_generator = gso_generator
 
         # layers

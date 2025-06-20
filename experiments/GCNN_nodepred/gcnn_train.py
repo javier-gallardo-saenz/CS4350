@@ -5,7 +5,7 @@ import torch.optim as optim
 from tqdm import tqdm
 
 from gcnn import GCNNalpha
-from data import get_karateclub_data
+from data import get_karateclub_data, get_karateclub_data_custom
 
 def train_epoch(model, data, optimizer, loss_fn, mask):
     model.train()
@@ -14,7 +14,10 @@ def train_epoch(model, data, optimizer, loss_fn, mask):
     loss = loss_fn(out[mask], data.y[mask])
     loss.backward()
     optimizer.step()
-    return loss.item()
+    pred = out.argmax(dim=1)
+    correct = pred[mask] == data.y[mask]
+    acc = int(correct.sum()) / int(mask.sum())
+    return loss.item(), acc
 
 @torch.no_grad()
 def eval_epoch(model, data, loss_fn, mask, eval_embeddings=False):
@@ -26,7 +29,7 @@ def eval_epoch(model, data, loss_fn, mask, eval_embeddings=False):
             pred = out.argmax(dim=1)
             correct = pred[mask] == data.y[mask]
             acc = int(correct.sum()) / int(mask.sum())
-            return loss.item(), acc, embeddings
+            return loss.item(), acc, embeddings, pred
         else:
             out = model(data.x, data.edge_index)
             loss = loss_fn(out[mask], data.y[mask])
@@ -40,7 +43,7 @@ def run_experiment(params):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # data
-    data, train_mask, val_mask, test_mask = get_karateclub_data()
+    data, train_mask, val_mask, test_mask = get_karateclub_data_custom()
     data = data.to(device)
     train_mask = train_mask.to(device)
     val_mask = val_mask.to(device)
@@ -61,8 +64,7 @@ def run_experiment(params):
 
     # optimizer, scheduler, loss
     optimizer = optim.Adam(model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                     patience=10, factor=0.5, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5, verbose=True)
     loss_fn = nn.CrossEntropyLoss()
 
     best_val_ce = float('inf')
@@ -72,7 +74,7 @@ def run_experiment(params):
     val_ce_history = []
 
     for epoch in tqdm(range(1, params["num_epochs"] + 1)):
-        train_ce = train_epoch(model, data, optimizer, loss_fn, train_mask)
+        train_ce, train_acc = train_epoch(model, data, optimizer, loss_fn, train_mask)
         val_ce, val_acc= eval_epoch(model, data, loss_fn, val_mask)
 
         scheduler.step(val_ce)
@@ -87,17 +89,17 @@ def run_experiment(params):
         if epoch % 10 == 0 or epoch == params["num_epochs"]:
             print(f"Epoch {epoch}/{params['num_epochs']} | Train CE: {train_ce:.4f} | Val CE : {val_ce:.4f}")
             print(f"Validation Accuracy: {val_acc:.4f}")
-            print(f"Alpha: {model.alpha.item()}")
+            #print(f"Alpha: {model.alpha.item()}")
             
     # test on the best model
     model.load_state_dict(best_state)
 
-    if params.get("eval_embeddings", False):
-        _, test_acc, embeddings = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=True)
+    if params.get("eval_embeddings", False):    # returns embeddings if eval_embeddings is True
+        _, test_acc, embeddings, pred = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=True)
     else:
         _, test_acc = eval_epoch(model, data, loss_fn, test_mask, eval_embeddings=False)
 
-    if params.get("eval_embeddings", False):
-        return best_val_ce, test_acc, val_ce_history, embeddings # Return the history as well
+    if params.get("eval_embeddings", False):    # returns embeddings if eval_embeddings is True
+        return best_val_ce, test_acc, val_ce_history, embeddings, pred
     else:
         return best_val_ce, test_acc, val_ce_history
