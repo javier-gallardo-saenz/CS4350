@@ -1,6 +1,6 @@
 from filters import create_filter_list
 from mlp import MLP
-
+from torch_geometric.nn import global_mean_pool, global_max_pool, global_add_pool
 from torch_geometric.utils import to_dense_adj
 import torch
 import torch.nn as nn
@@ -105,7 +105,12 @@ class GCNNalpha(nn.Module):
             conv_layer.filters = filters
             x = conv_layer(x)
 
-        x = torch.scatter(x, batch, dim=0, reduce=self.reduction) # perform pooling
+        if self.reduction == 'sum':
+            x = global_add_pool(x, batch)
+        elif self.reduction == 'mean':
+            x = global_mean_pool(x, batch)
+        elif self.reduction == 'max':
+            x = global_max_pool(x, batch)
 
         # apply readout or default linear mapping to output_dim
         if self.apply_readout:
