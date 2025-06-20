@@ -19,7 +19,7 @@ DEFAULT_PARAMS = {
     "weight_decay": 1e-5,
     "alpha": 0.0,
     "num_epochs": 300,                 
-    "dims": [150, 64, 64, 64],             # input + hidden dims only
+    "dims": [11, 64, 64, 64],             # input + hidden dims only
     "degrees": [1]*3,               # poly degree per conv layer
     "act_fns": [Tanh()]* 3,
     "readout_dims": [64, 3],          # last must match len(targets)
