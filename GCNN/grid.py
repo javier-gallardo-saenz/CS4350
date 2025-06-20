@@ -13,7 +13,7 @@ from gs_utils import generate_run_id, plot_val_mae_per_target, plot_alphas_histo
 # --------------------
 DEFAULT_PARAMS = {
     "N": 1000,                        # number of molecules to use
-    "targets": [1],             # which targets to predict
+    "targets": [0, 1, 2],             # which targets to predict
     "batch_size": 64,
     "lr": 1e-3,
     "alpha_lr": 1e-2,
@@ -35,7 +35,8 @@ DEFAULT_PARAMS = {
 # --------------------
 GRID_PARAMS = {
     "num_epochs": [300, 500],
-    #"pooling": ["sum", "max", "mean"],
+    #"act_fns": [[Tanh()]*2 , [ReLU()]* 2],
+    "pooling": ["sum", "max", "mean"],
     "alpha": [0, 0.5, -0.5]
 }
 
@@ -46,9 +47,9 @@ grid = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
 # --------------------
 # 3. OUTPUT SETUP
 # --------------------
-RESULTS_DIR = "grid_loc"
+RESULTS_DIR = "GCNN/grid_search_results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
-CSV_PATH = os.path.join(RESULTS_DIR, "one_time.csv")
+CSV_PATH = os.path.join(RESULTS_DIR, "grid_search_summary.csv")
 
 all_grid_results = []
 
@@ -106,4 +107,3 @@ if not df.empty:
     best = df.loc[df["best_val_mean_mae"].idxmin()]
     print("\n--- Best Run (lowest validation MAE) ---")
     print(best.to_string())
-
