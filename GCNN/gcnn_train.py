@@ -83,7 +83,17 @@ def run_experiment(params):
     ).to(device)
 
     # optimizer, scheduler, loss
-    optimizer = optim.Adam(model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
+    optimizer = optim.Adam([
+        # Parameters excluding 'alpha'
+        {'params': [p for name, p in model.named_parameters() if 'alpha' not in name],
+         'lr': params['lr'],
+         'weight_decay': params['weight_decay']},
+
+        # 'alpha' parameter with its own learning rate
+        {'params': model.alpha,
+         'lr': params["alpha_lr"],
+         'weight_decay': 0.0} # Typically no weight decay for a single scalar parameter like alpha
+    ])
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                      patience=10, factor=0.5, verbose=True)
     loss_fn = nn.L1Loss()

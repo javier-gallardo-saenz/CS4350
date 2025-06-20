@@ -1,11 +1,30 @@
 from filters import create_filter_list
-from mlp import MLP
 from torch_geometric.nn import global_mean_pool, global_max_pool, global_add_pool
 from torch_geometric.utils import to_dense_adj
 import torch
 import torch.nn as nn
 from torch.nn import ReLU # Assuming ReLU is the activation used in params
 
+class MLP(nn.Module):
+    def __init__(self, dims: list, activation=None, bias=True):
+        """
+        dims: list of layer dimensions [input, hidden1, ..., output]
+        activation: single activation function (applied after each hidden layer)
+        bias: whether to include biases in linear layers
+        """
+        super().__init__()
+        layers = []
+
+        for i in range(len(dims) - 1):
+            layers.append(nn.Linear(dims[i], dims[i + 1], bias=bias))
+            if i < len(dims) - 2 and activation is not None:
+                layers.append(activation)
+
+        self.mlp = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.mlp(x)
+    
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, filter_list, activation=None):
         super().__init__()
