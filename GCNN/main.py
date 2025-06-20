@@ -19,9 +19,9 @@ DEFAULT_PARAMS = {
     "weight_decay": 1e-5,
     "alpha": 0.0,
     "num_epochs": 300,                 
-    "dims": [150, 64, 64, 64],             # input + hidden dims only
-    "degrees": [1]*3,               # poly degree per conv layer
-    "act_fns": [Tanh()]* 3,
+    "dims": [11, 64, 64],             # input + hidden dims only
+    "degrees": [1]*2,               # poly degree per conv layer
+    "act_fns": [ReLU()]* 2,
     "readout_dims": [64, 3],          # last must match len(targets)
     "pooling": "sum",
     "apply_readout": True,
@@ -33,8 +33,8 @@ DEFAULT_PARAMS = {
 # 2. GRID SEARCH SPACE
 # --------------------
 GRID_PARAMS = {
-    "num_epochs": [500, 1000],
-    "act_fns": [[Tanh()]*3 , [ReLU()]* 3],
+    "num_epochs": [300, 500],
+    #"act_fns": [[Tanh()]*2 , [ReLU()]* 2],
     "pooling": ["sum", "max", "mean"],
     "alpha": [0, 0.5, -0.5]
 }
