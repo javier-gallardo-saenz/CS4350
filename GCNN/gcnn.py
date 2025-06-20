@@ -25,56 +25,70 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.mlp(x)
     
-class ConvLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, filter_list, activation=None):
-        super().__init__()
+import torch.nn as nn
 
+class ConvLayer(nn.Module):
+    def __init__(self, in_channels, out_channels, filter_list,
+                 activation=None, use_bn=False, dropout_p=0.0):
+        super().__init__()
         self.K = len(filter_list) - 1
-        self.filters = filter_list # This will be updated in forward pass of GCNNalpha
+        self.filters = filter_list
         self.activation = activation
 
-        self.bias = nn.Parameter(torch.zeros(out_channels))
         self.weights = nn.ParameterList([
             nn.Parameter(torch.randn(in_channels, out_channels))
             for _ in range(self.K + 1)
         ])
-
-        for weight in self.weights:
-            nn.init.xavier_uniform_(weight)
+        self.bias = nn.Parameter(torch.zeros(out_channels))
         nn.init.zeros_(self.bias)
+        for w in self.weights:
+            nn.init.xavier_uniform_(w)
+
+        self.use_bn = use_bn
+        if use_bn:
+            # BatchNorm over the feature dimension
+            self.bn = nn.BatchNorm1d(out_channels)
+
+        self.dropout = nn.Dropout(p=dropout_p) if dropout_p > 0 else None
 
     def forward(self, X):
-        N, _ = X.shape
-        out = torch.zeros(N, self.weights[0].size(1), device=X.device)
-
+        # X: [N, in_channels]
+        out = torch.zeros(X.size(0), self.bias.size(0), device=X.device)
         for k, Lk in enumerate(self.filters):
             out += Lk @ X @ self.weights[k]
-
         out += self.bias
 
         if self.activation is not None:
             out = self.activation(out)
+        if self.use_bn:
+            out = self.bn(out)         # normalize each feature channel
+        if self.dropout is not None:
+            out = self.dropout(out)    # randomly zero some features
 
         return out
+
 
 class GCNNalpha(nn.Module):
     def __init__(
         self,
         dims: list,
         output_dim: int,
-        degrees: list,
-        activations: list,
+        hops: int,
+        activation,
         gso_generator: callable,
         alpha: float = 0.5,
-        learn_alpha: bool = True,  # Add this parameter
-        reduction: str = 'max',
-        readout_dims=None,
-        apply_readout: bool = True
+        learn_alpha: bool = True,
+        pooling: str = 'max',
+        readout_hidden_dims: list = None,   # renamed
+        apply_readout: bool = True,
+        use_bn=False,
+        dropout_p=0.0
     ):
         super().__init__()
 
-        self.reduction = reduction
+        self.reduction = pooling
         self.apply_readout = apply_readout
+        self.hops = hops 
 
         self.learn_alpha = learn_alpha
         if learn_alpha:
@@ -90,20 +104,25 @@ class GCNNalpha(nn.Module):
         for i in range(len(dims) - 1):
             in_dim = dims[i]
             out_dim = dims[i + 1]
-            degree = degrees[i]
-            activation_fn = activations[i]
 
-            conv_layer = ConvLayer(in_dim, out_dim, [torch.eye(1)] * (degree + 1), activation=activation_fn)
+            conv_layer = ConvLayer(in_dim,
+                out_dim,
+                [torch.eye(1)] * (hops + 1),
+                activation=activation,
+                use_bn= use_bn,
+                dropout_p = dropout_p)
+            
             self.layers.append(conv_layer)
-            self.layer_degrees.append(degree)
 
-        if readout_dims is not None:
-            self.readout = MLP([dims[-1]] + readout_dims)
+        if readout_hidden_dims is not None:
+            self.readout = MLP([dims[-1]] + readout_hidden_dims,
+                               activation=activation)
+            last_readout_size = readout_hidden_dims[-1]
         else:
             self.readout = None
+            last_readout_size = dims[-1]
 
-        self.output_lin = nn.Linear(dims[-1], output_dim, bias=True)
-
+        self.output_lin = nn.Linear(last_readout_size, output_dim, bias=True)
 
     def forward(self, X, batch, edge_index):
         adj = to_dense_adj(edge_index, batch)
@@ -116,11 +135,11 @@ class GCNNalpha(nn.Module):
             gsos.append(S_i)
 
         S = torch.block_diag(*gsos)
-
         x = X
+
+        filters = create_filter_list(S, self.hops)
+
         for i, conv_layer in enumerate(self.layers):
-            degree = self.layer_degrees[i]
-            filters = create_filter_list(S, degree)
             conv_layer.filters = filters
             x = conv_layer(x)
 
@@ -132,10 +151,13 @@ class GCNNalpha(nn.Module):
             x = global_max_pool(x, batch)
 
         # apply readout or default linear mapping to output_dim
+        if self.apply_readout and self.readout is not None:
+            x = self.readout(x)
+
+        # always apply the final linear to get the correct output_dim
         if self.apply_readout:
-            if self.readout is not None:
-                x = self.readout(x)
-            else:
-                x = self.output_lin(x)
-            return x.squeeze(-1) if x.dim() > 1 and x.size(-1) == 1 else x
+            x = self.output_lin(x)
+            # if it ends up with last‐dim 1, squeeze
+            if x.dim() > 1 and x.size(-1) == 1:
+                x = x.squeeze(-1)
         return x
