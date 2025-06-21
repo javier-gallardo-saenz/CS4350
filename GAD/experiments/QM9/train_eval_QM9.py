@@ -46,6 +46,9 @@ def evaluate_network(model, data_loader, prop_idx, factor, device, diffusion_ope
             out_model = model(node_fts, automic_num, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec,
                               node_deg_mat, lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
 
+            if num_properties == 1 and out_model.ndim == 1:
+                out_model = out_model.unsqueeze(1)
+
             if isinstance(prop_idx, list):
                 target_properties = batched_graph.y[:, prop_idx].to(device)
             else:
@@ -117,6 +120,9 @@ def train_epoch(model, data_loader, optimizer, prop_idx, factor, device, loss_fn
 
         out_model = model(node_fts, automic_num, edge_fts, edge_index, F_norm_edge, F_dig, node_deg_vec, node_deg_mat,
                           lap_mat, k_eig_val, k_eig_vec, num_nodes, norm_n, batch_idx)
+
+        if num_properties == 1 and out_model.ndim == 1:
+            out_model = out_model.unsqueeze(1)
 
         if isinstance(prop_idx, list):
             target_properties = batched_graph.y[:, prop_idx].to(device)
