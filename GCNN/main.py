@@ -16,13 +16,11 @@ DEFAULT_PARAMS = {
     "N": 1200,
     "targets": [0, 1, 2],
     "batch_size": 64,
-    "lr": 1e-3,
+    "lr": 1e-4,
     "alpha_lr": 1e-2,
-    "weight_decay": 1e-5,
     "weight_decay": 1e-5,
     "alpha": 0.5,
     "num_epochs": 250,
-    "dims": [11, 64, 64],
     "dims": [11, 64, 64],
     "hops": 2,
     "act_fn": ReLU(),
@@ -37,8 +35,8 @@ DEFAULT_PARAMS = {
 }
 
 GRID_PARAMS = {
-    "targets": [[1], [2]],
-    "learn_alpha": [False, True],
+    "targets": [[0],[1],[2]],
+    "learn_alpha": [True, False],
     "alpha": [0.5, 0, -0.5, 1.0],
     "pooling": ["sum", "max", "mean"]
 }
