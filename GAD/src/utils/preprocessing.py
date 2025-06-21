@@ -191,3 +191,68 @@ def average_node_degree(dataset):
                  log=torch.mean(torch.log(D + 1)))
 
     return D, avg_d
+
+
+def compute_flowmat_for_dataset_evaluation(adj: Tensor, lowest: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    """
+    From dense adj and lowest eig vector, build
+    directed, normalized flow F_norm_edge & its degree F_dig
+    """
+    # Initialize F with the same shape as adj, and desired float32 dtype
+    F = torch.zeros_like(adj, dtype=torch.float32)
+    n = adj.shape[0]
+
+    # construct gradient flow vector field
+    # Iterate through indices. This loop is inherently sequential.
+    # For very large graphs, consider if this can be vectorized.
+    for i in range(n):
+        for j in range(n):
+            # adj[i, j] directly works with torch.Tensor
+            if adj[i, j].item() == 1: # .item() is good here to compare a single tensor element
+                diff = lowest[i] - lowest[j]
+                # No need for .item() here if diff is already a scalar tensor
+                # You can directly assign tensor to tensor element
+                F[i, j] = diff if diff != 0 else torch.tensor(1e-8, dtype=torch.float32)
+
+    # Normalize rows using torch.linalg.norm
+    # Use torch.linalg.norm for PyTorch tensors
+    row_sums = torch.linalg.norm(F, ord=1, dim=1, keepdim=True) + 1e-20
+    F_norm = F / row_sums  # matrix: strength of node i flow to node j
+
+    # Use .sum(dim=0) for PyTorch tensor and avoid unnecessary from_numpy
+    F_dig = F_norm.sum(dim=0)  # vec: total flow that each node receives from all other nodes
+
+    # dense_to_sparse expects a torch.Tensor, no need for from_numpy
+    F_norm_edge = dense_to_sparse(F_norm)[1]
+
+    return F_norm_edge, F_dig, F_norm
+
+
+def process_single_graph_for_dataset_evaluation(
+    data: Data,
+    k: int,
+    laplacian_fn: Callable[..., torch.Tensor],
+    **laplacian_kwargs: Any
+) -> Tuple[Dict[str, Any], torch.Tensor, torch.Tensor]:
+    """
+    All processing for one torch_geometric.data.Data graph → dict.
+    Returns the processed graph dict, the dense F matrix, and eigenvalues.
+    """
+    d = data.to_dict()
+    n = data.num_nodes
+
+    d["norm_n"] = torch.full((n, 1), 1.0 / n).sqrt()
+    adj = to_dense_adj(data.edge_index)[0]
+
+    low, eig_vecs, eig_vals = compute_spectral_features(
+        adj, n, k, laplacian_fn, **laplacian_kwargs
+    )
+    d.update(k_eig_vec=eig_vecs, k_eig_val=eig_vals)
+
+    # Compute F_norm_edge, F_dig, AND the dense F_norm matrix
+    F_norm_edge, F_dig, F_norm_dense = compute_flowmat_for_dataset_evaluation(adj, low)
+    d.update(F_norm_edge=F_norm_edge, F_dig=F_dig)
+
+    return d, F_norm_dense, eig_vals
+
+
