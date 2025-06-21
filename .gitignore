@@ -2,3 +2,4 @@
 .vscode
 GCNN/__pycache__
 data/
+GCNN/results/.~lock.summary.csv#

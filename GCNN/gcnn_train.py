@@ -16,8 +16,16 @@ def train_epoch(model, loader, optimizer, loss_fn, device):
     for batch in loader:
         batch = batch.to(device)
         optimizer.zero_grad()
-        out   = model(batch.x, batch.batch, batch.edge_index)
-        loss  = loss_fn(out, batch.y)
+        out = model(batch.x, batch.batch, batch.edge_index)
+        target = batch.y
+
+        # ensure both are shape [N]
+        if out.dim() == 2 and out.size(1) == 1:
+            out = out.squeeze(1)
+        if target.dim() == 2 and target.size(1) == 1:
+            target = target.squeeze(1)
+
+        loss = loss_fn(out, target)
         loss.backward()
         optimizer.step()
         total += loss.item() * batch.num_graphs
