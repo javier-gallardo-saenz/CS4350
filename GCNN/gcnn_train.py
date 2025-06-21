@@ -35,11 +35,14 @@ def eval_epoch(model, data_loader, params, device, tag='Val'):
             x = data.x.to(device)
             batch = data.batch.to(device)
             edge_index = data.edge_index.to(device)
-            y = data.y[:, params["targets"]].to(device)  # select relevant targets
+            y = data.y.to(device)
 
             out = model(x, batch, edge_index)
 
-            abs_errors = torch.abs(out - y)  # Per-sample, per-target absolute errors
+            if out.dim() == 1:
+                out = out.unsqueeze(1)
+
+            abs_errors = torch.abs(out - y) # Now out and y should both be [N, 1]
 
             if total_errors is None:
                 total_errors = abs_errors.sum(dim=0)
@@ -49,38 +52,35 @@ def eval_epoch(model, data_loader, params, device, tag='Val'):
             total_samples += y.size(0)
 
     per_target_mae = (total_errors / total_samples).cpu().numpy()
-
-    #print(f"{tag} MAE per target: {per_target_mae}")
     return per_target_mae
 
 
 def run_experiment(params):
-    # Create a unique run ID using a timestamp
-    run_id = generate_run_id(length=4)
-    
-    # Define save directory
-    save_dir = "results"
-    os.makedirs(save_dir, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     ntargets = len(params["targets"])
     # data
-    train_loader, val_loader, test_loader = get_data_loaders(params["N"], params["batch_size"])
+    train_loader, val_loader, test_loader = get_data_loaders(
+        params["N"],
+        params["targets"],
+        batch_size = params["batch_size"],
+    )
 
     # model
     model = GCNNalpha(
         dims=params["dims"],
-        output_dim= ntargets,
-        degrees=params["degrees"],
-        activations=params["act_fns"],
+        output_dim=ntargets,
+        hops=params["hops"],
+        activation=params["act_fn"],
         gso_generator=params["gso_generator"],
         alpha=params["alpha"],
-        learn_alpha= params.get("learn_alpha", True),
-        reduction= params.get("pooling"),
-        readout_dims=params.get("readout_dims", None),
+        learn_alpha=params.get("learn_alpha", True),
+        pooling=params.get("pooling"), 
+        readout_hidden_dims=params.get("readout_hidden_dims", None), 
         apply_readout=params.get("apply_readout", True),
     ).to(device)
+
 
     # optimizer, scheduler, loss
     optimizer = optim.Adam([
@@ -92,10 +92,10 @@ def run_experiment(params):
         # 'alpha' parameter with its own learning rate
         {'params': model.alpha,
          'lr': params["alpha_lr"],
-         'weight_decay': 0.0} # Typically no weight decay for a single scalar parameter like alpha
+         'weight_decay': 0.0} 
     ])
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                     patience=10, factor=0.5, verbose=True)
+                                                    patience=10, factor=0.5, verbose=True)
     loss_fn = nn.L1Loss()
 
     best_val_mean_mae = float('inf')
@@ -126,7 +126,16 @@ def run_experiment(params):
 
         if val_mean_mae < best_val_mean_mae:
             best_val_mean_mae = val_mean_mae
-            best_state = model.state_dict() # Capture the state dict of the best model
+            best_state = model.state_dict()
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        patience = params["patience"]
+
+        if epochs_no_improve >= patience:
+            print(f"Early stopping triggered after {epoch} epochs (no improvement for {patience} epochs).")
+            break 
 
         if epoch % 10 == 0 or epoch == params["num_epochs"]:
             print(f"Epoch {epoch}/{params['num_epochs']} | Train MAE: {train_mae:.4f} | Val MAE (per target): {val_per_target_mae} | alpha: {alpha}")
@@ -140,6 +149,6 @@ def run_experiment(params):
     print(f"Final Test MAE (mean): {test_per_target_mae.mean():.4f}")
     print(f"Final Test MAE (per target): {test_per_target_mae}")
 
-    # Call the new function to save all results
+    #save_experiment_results(run_id, save_dir, params, best_val_mean_mae, test_per_target_mae, val_per_target_mae_history)
 
-    return best_val_mean_mae, test_per_target_mae, val_per_target_mae_history, alphas_history
+    return model, best_val_mean_mae, test_per_target_mae, val_per_target_mae_history, alphas_history

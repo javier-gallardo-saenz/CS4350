@@ -72,8 +72,8 @@ def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
 
 def adv_diff(A: torch.Tensor,
              alpha: float,
-             gamma_diff: float,
-             gamma_adv: float) -> torch.Tensor:
+             gamma_diff=1,
+             gamma_adv=1) -> torch.Tensor:
     """
     Unbatched adversarial-diffusive operator for one graph.
     A: [N, N] adjacency.

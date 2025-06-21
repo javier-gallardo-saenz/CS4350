@@ -100,6 +100,7 @@ def plot_val_mae_per_target(val_per_target_mae_history, run_id, save_dir="grid_s
     plt.title(f"Validation MAE per Target (Run {run_id})")
     plt.legend()
     plt.grid(True)
+    plt.yscale('log')
     plt.tight_layout()
 
     plot_path = os.path.join(save_dir, f"loss_{run_id}.png")
