@@ -49,10 +49,6 @@ def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
     """
     deg = A.sum(dim=1)                 # [N]
 
-    if alpha == 0:
-        D = torch.diag(deg)            # [N, N]
-        return D - A
-
     D_alpha     = torch.diag(deg.pow(alpha))    # [N, N]
     D_neg_alpha = torch.diag(deg.pow(-alpha))   # [N, N]
 

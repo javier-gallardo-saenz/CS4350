@@ -59,9 +59,10 @@ def main():
     parser.add_argument('--type_net', help="Enter the type_net for DGN layer", type=str, default='simple')
     parser.add_argument('--towers', help="Enter the num of towers for DGN_tower", type=int, default=3)
 
-    parser.add_argument('--prop_idx', help="Enter the QM9 property index", type=int)
-    parser.add_argument('--factor', help="Enter the factor 1000 to convert the QM9 property with Unit eV"
-                                         " to meV. Enter 1 for the others properties", type=int)
+    parser.add_argument('--prop_idx', type=int, nargs='+', help='Indices of the properties to learn '
+                                                                 '(e.g., 0 1 2). At least one index is required.')
+    parser.add_argument('--factor', type=int, nargs='+', help="Enter the factor 10 to convert the QM9 property with Unit eV"
+                                         " to meV. Enter 1 for the others properties")
 
     
     parser.add_argument('--num_epochs', help="Enter the num of epochs", type=int)
@@ -69,6 +70,7 @@ def main():
     parser.add_argument('--lr', help="Enter the learning rate", type=float)
     parser.add_argument('--weight_decay', help="Enter the weight_decay", type=float)
     parser.add_argument('--min_lr', help="Enter the minimum lr", type=float)
+    parser.add_argument('--patience', help="Enter the patience to stop overfitting", type=int, default=20)
 
     parser.add_argument('--operator', help="Enter the desired operator whose eigenvectors will define "
                                            "the gradient maps", type=str, default='Laplacian')
@@ -77,6 +79,8 @@ def main():
                         default=0, type=float)
     parser.add_argument('--gamma_diff', help="Enter diffusion weight for advection-diffusion operator",
                         default=0, type=float)
+
+    parser.add_argument('--model_name', help="Enter the desired path for the model", type=str)
 
 
     
@@ -102,10 +106,10 @@ def main():
     dataset = dataset.shuffle()  # This shuffles the entire dataset in-place
 
     # Define the split points
-    size = 1000
-    test_size = int(0.1*size)
-    val_size = int(0.1*size)
-    train_size = int(0.8*size)
+    size = 1200
+    test_size = int(0.15*size)
+    val_size = int(0.15*size)
+    train_size = int(0.7*size)
 
     dataset_test = dataset[:test_size]
     dataset_val = dataset[test_size:val_size+test_size]
@@ -118,60 +122,94 @@ def main():
 
     print("data preprocessing: calculate and store the vector field F, etc.")
 
-    operator, params = get_operator_and_params(args.operator, args.alpha, args.gamma_adv, args.gamma_diff)
-
-    D, avg_d = average_node_degree(dataset_train)
-    dataset_train = preprocessing_dataset(dataset_train, args.k, operator, **params)
-    dataset_val = preprocessing_dataset(dataset_val, args.k, operator, **params)
-    dataset_test = preprocessing_dataset(dataset_test, args.k, operator, **params)
+    for i, alpha in enumerate([-0.5, 0.0, 0.5]):
+        
+        operator, params = get_operator_and_params(args.operator, alpha, args.gamma_adv, args.gamma_diff)
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(device)
+        D, avg_d = average_node_degree(dataset_train)
+        dataset_train = preprocessing_dataset(dataset_train, args.k, operator, **params)
+        dataset_val = preprocessing_dataset(dataset_val, args.k, operator, **params)
+        dataset_test = preprocessing_dataset(dataset_test, args.k, operator, **params)
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(device)
+        
+        train_loader = DataLoader(dataset=dataset_train, batch_size=args.batch_size, shuffle=True,
+                                  num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
+        val_loader = DataLoader(dataset=dataset_val, batch_size=args.batch_size, shuffle=False,
+                                num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
+        test_loader = DataLoader(dataset=dataset_test, batch_size=args.batch_size, shuffle=False,
+                                 num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
     
-    train_loader = DataLoader(dataset=dataset_train, batch_size=args.batch_size, shuffle=True,
-                              num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
-    val_loader = DataLoader(dataset=dataset_val, batch_size=args.batch_size, shuffle=False,
-                            num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
-    test_loader = DataLoader(dataset=dataset_test, batch_size=args.batch_size, shuffle=False,
-                             num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
-
-
-    diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
-                                                                                args.diff_alpha,
-                                                                                args.diff_gamma_adv,
-                                                                                args.diff_gamma_diff)
-
-    print("create GAD model")
     
-    model = GAD(num_of_node_fts=11, num_of_edge_fts=4, hid_dim=args.hid_dim, atomic_emb=args.atomic_emb,
-                graph_norm=args.use_graph_norm, batch_norm=args.use_batch_norm, dropout=args.dropout,
-                readout=args.readout, aggregators=args.aggregators, scalers=args.scalers, edge_fts=args.use_edge_fts,
-                avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
-                use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
-                diffusion_type=diff_type,
-                diffusion_param=diff_parameters,
-                k=args.k, n_layers=args.n_layers)
+        diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
+                                                                                    args.diff_alpha,
+                                                                                    args.diff_gamma_adv,
+                                                                                    args.diff_gamma_diff)
     
-
-    model = model.to(device)
+        print("create GAD model")
+        
+        model = GAD(num_of_node_fts=11, num_of_edge_fts=4, hid_dim=args.hid_dim, atomic_emb=args.atomic_emb,
+                    graph_norm=args.use_graph_norm, batch_norm=args.use_batch_norm, dropout=args.dropout,
+                    readout=args.readout, aggregators=args.aggregators, scalers=args.scalers, edge_fts=args.use_edge_fts,
+                    avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
+                    use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
+                    diffusion_type=diff_type,
+                    diffusion_param=diff_parameters,
+                    k=args.k, n_layers=args.n_layers,
+                    output_size=len(args.prop_idx))
+        
     
-    optimizer = opt.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        model = model.to(device)
+        
+        optimizer = opt.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        
+        train_QM9(model, optimizer, train_loader, val_loader, prop_idx=args.prop_idx, factor=args.factor, device=device,
+                  num_epochs=args.num_epochs, min_lr=args.min_lr, diffusion_operator=diff_operator,
+                  early_stopping_patience=args.patience, path_to_save_model=args.model_name + '_' + str(i) + '.pth')
+        
+        print("Uploading the best model")
     
-    train_QM9(model, optimizer, train_loader, val_loader, prop_idx=args.prop_idx, factor=args.factor, device=device,
-              num_epochs=args.num_epochs, min_lr=args.min_lr, diffusion_operator=diff_operator)
+        model_ = torch.load(args.model_name + '_' + str(i) + '.pth', weights_only=False)
     
-    print("Uploading the best model")
-
-    model_ = torch.load('model.pth')
-
-    test_mae = evaluate_network(model_, test_loader, args.prop_idx, args.factor, device)
-    val_mae = evaluate_network(model_, val_loader, args.prop_idx, args.factor, device)
-    train_mae = evaluate_network(model_, train_loader, args.prop_idx, args.factor, device)
-
-    print("")
-    print("Best Train MAE: {:.4f}".format(train_mae))
-    print("Best Val MAE: {:.4f}".format(val_mae))
-    print("Best Test MAE: {:.4f}".format(test_mae))
+        combined_test_mae, individual_test_maes = evaluate_network(model_, test_loader, args.prop_idx, args.factor, device,
+                                                                   diff_operator)
+        combined_val_mae, individual_val_maes = evaluate_network(model_, val_loader, args.prop_idx, args.factor, device,
+                                                                 diff_operator)
+        combined_train_mae, individual_train_maes = evaluate_network(model_, train_loader, args.prop_idx, args.factor,
+                                                                     device, diff_operator)
+    
+        print("")
+        print("--- Final MAEs (Combined) ---")
+        print("Train MAE: {:.4f}".format(combined_train_mae))
+        print("Val MAE:   {:.4f}".format(combined_val_mae))
+        print("Test MAE:  {:.4f}".format(combined_test_mae))
+    
+        print("\n--- Final MAEs (Per Property) ---")
+    
+        # Train Individual MAEs
+        print("Train Individual MAEs:")
+        if isinstance(args.prop_idx, list):
+            for i, p_idx in enumerate(args.prop_idx):
+                print(f"  Property {p_idx}: {individual_train_maes[i].item():.4f}")
+        else:
+            print(f"  Property {args.prop_idx}: {individual_train_maes.item():.4f}")
+    
+        # Val Individual MAEs
+        print("\nValidation Individual MAEs:")
+        if isinstance(args.prop_idx, list):
+            for i, p_idx in enumerate(args.prop_idx):
+                print(f"  Property {p_idx}: {individual_val_maes[i].item():.4f}")
+        else:
+            print(f"  Property {args.prop_idx}: {individual_val_maes.item():.4f}")
+    
+        # Test Individual MAEs
+        print("\nTest Individual MAEs:")
+        if isinstance(args.prop_idx, list):
+            for i, p_idx in enumerate(args.prop_idx):
+                print(f"  Property {p_idx}: {individual_test_maes[i].item():.4f}")
+        else:
+            print(f"  Property {args.prop_idx}: {individual_test_maes.item():.4f}")
 
 
 if __name__ == '__main__':
