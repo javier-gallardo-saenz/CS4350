@@ -36,8 +36,8 @@ DEFAULT_PARAMS = {
 
 GRID_PARAMS = {
     "targets": [[0],[1],[2]],
-    "learn_alpha": [True, False],
-    "alpha": [0.5, 0, -0.5, 1.0],
+    "learn_alpha": [True],
+    "alpha": [0],
     "pooling": ["sum", "max", "mean"]
 }
 
@@ -48,7 +48,7 @@ grid = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
 # -----------------------
 # 2. Prepare Result Paths
 # -----------------------
-TOP_RESULTS_DIR = "GCNN/results_single"
+TOP_RESULTS_DIR = "GCNN/results_single_alpha0"
 os.makedirs(TOP_RESULTS_DIR, exist_ok=True)
 
 SUMMARY_CSV = os.path.join(TOP_RESULTS_DIR, "summary.csv")
