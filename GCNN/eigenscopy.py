@@ -16,7 +16,7 @@ def compute_spectrum(M):
     n = lam.shape[0]
 
     # Mean pairwise distance 
-    mpd = np.sum(np.abs(np.diff(evals))) / n
+    mpd = np.sum(np.abs(np.diff(lam))) / n
 
     # Spectral range
     size = lam[-1] - lam[0]
