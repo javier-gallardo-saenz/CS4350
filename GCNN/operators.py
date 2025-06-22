@@ -41,14 +41,20 @@ def batched_adv_diff(A: torch.Tensor,
 #---------------NOT BATCHED ----------------
 ############################################
 
-def normalized_adjacency(A):
+def normalized_adjacency(A, alpha):
     deg = A.sum(dim=1)                 # [N]
     D_neg_alpha = torch.diag(deg.pow(-0.5))
+    A_hat = A + torch.eye(deg.shape[0])
 
-    return D_neg_alpha @ A @ D_neg_alpha
+    return D_neg_alpha @ (A_hat)  @ D_neg_alpha
 
-def normalized_laplacian(A):
-    return torch.eye(A.shape[0]) - normalized_adjacency(A)
+def normalized_laplacian(A, alpha):
+    return torch.eye(A.shape[0]) - normalized_adjacency(A, alpha)
+
+def turbohub_laplacian(A, alpha):
+    A = normalized_adjacency(A, alpha)
+    I = torch.eye(A.shape[0])
+    return hub_laplacian(A, alpha)
 
 def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
     """
@@ -70,10 +76,8 @@ def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
     ratio = ratio * A
 
     Xi = torch.diag(ratio.sum(dim=1))  # [N, N]
-
     #hub Laplacian
-    return Xi - D_neg_alpha @ A @ D_alpha
-
+    return Xi - D_neg_alpha @ (A) @ D_alpha
 
 def adv_diff(A: torch.Tensor,
              alpha: float,

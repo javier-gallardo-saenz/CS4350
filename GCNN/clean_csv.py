@@ -1,45 +1,38 @@
 import pandas as pd
-import os
-import shutil
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Load the CSV files
-file_a = 'GCNN/results_single/summary.csv'  # Replace with your actual filename
-file_b = 'GCNN/results_single_alpha0/summary.csv'  # Replace with your actual filename
+# Load your CSV file
+df = pd.read_csv('updates.csv')  # Replace with your file name
 
-df_a = pd.read_csv(file_a)
-df_b = pd.read_csv(file_b)
+# Get unique targets
+targets = df['targets'].unique()
 
-# Identify the bad rows to remove
-bad_rows = (df_a['alpha'] == 0) & (df_a['learn_alpha'] == True)
+# Process each target group
+for target in sorted(targets):
+    print(f"\n=== Analysis for Target: {target} ===")
 
-# Get the list of run_ids to delete files/folders
-run_ids_to_delete = df_a.loc[bad_rows, 'run_id'].tolist()
+    # Filter for the current target
+    df_target = df[df['targets'] == target].copy()
 
-# Optional: base directory if files/folders are stored in a specific location
-base_dir = 'GCNN/results_single/'  # Change to your target directory if needed
+    # Sort by lowest test_mae
+    df_target_sorted = df_target.sort_values(by='test_mae')
+    print("\nTop 5 Performers for this Target:")
+    print(df_target_sorted[['run_id', 'test_mae', 'alpha', 'learn_alpha', 'pooling']].head())
 
-# Delete corresponding files/folders
-for run_id in run_ids_to_delete:
-    path = os.path.join(base_dir, str(run_id))
-    try:
-        if os.path.isdir(path):
-            shutil.rmtree(path)  # Remove folder and all contents
-            print(f"Deleted folder: {path}")
-        elif os.path.isfile(path):
-            os.remove(path)  # Remove file
-            print(f"Deleted file: {path}")
-        else:
-            print(f"No file or folder found: {path}")
-    except Exception as e:
-        print(f"Error deleting {path}: {e}")
 
-# Remove the bad rows from df_a
-filtered_df_a = df_a[~bad_rows]
+    g = sns.FacetGrid(df_target, col='pooling', row='learn_alpha', margin_titles=True)
+    g.map_dataframe(sns.boxplot, x='alpha', y='test_mae')
+    g.fig.subplots_adjust(top=0.9)
+    g.fig.suptitle(f'Test MAE Distribution per Pooling and Learn Alpha (Target: {target})')
+    plt.show()
 
-# Append all rows from df_b
-updated_df = pd.concat([filtered_df_a, df_b], ignore_index=True)
 
-# Save the updated CSV
-updated_df.to_csv('updates.csv', index=False)
 
-print("File cleaned and updated successfully!")
+print("\n✅ Analysis Complete for All Targets.")
+
+# Mean test_mae grouped by target and pooling
+mean_mae_summary = df.groupby(['targets', 'pooling'])['test_mae'].mean().reset_index()
+
+print("Mean Test MAE per Target and Pooling:")
+print(mean_mae_summary)
