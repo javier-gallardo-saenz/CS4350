@@ -2,7 +2,7 @@ from torch_geometric.datasets import QM9
 from torch_geometric.utils import to_dense_adj
 import numpy as np
 import matplotlib.pyplot as plt
-from operators import hub_laplacian
+from operators import hub_laplacian, normalized_adjacency, normalized_laplacian,adv_diff
 from scipy.special import binom
 
 
@@ -16,12 +16,14 @@ def compute_spectrum(M):
     n = lam.shape[0]
 
     # Mean pairwise distance 
-    mpd = np.sum(np.abs(np.diff(lam))) / n
+    #mpd = np.sum(np.abs(np.diff(lam))) / n
+
+    sg = np.abs(lam[1] -lam[0])
 
     # Spectral range
     size = lam[-1] - lam[0]
 
-    return mpd, size
+    return sg, size
 
 
 def process_graphs(matrices):
@@ -39,10 +41,12 @@ def compare_properties(adjacency_matrices):
     L1_matrices = []
 
     for adj in adjacency_matrices:
-        L = hub_laplacian(adj, alpha=0)
-        L1 = hub_laplacian(adj, alpha=0.5)
+        L0 = hub_laplacian(adj, alpha=0)
+        L1 = hub_laplacian(adj, alpha=1)
+        #L1 = adv_diff(adj, alpha= 1, gamma_adv = 0.5, gamma_diff =0.5)
 
-        L0_matrices.append(L)
+
+        L0_matrices.append(L0)
         L1_matrices.append(L1)
 
     mpds_L0, sizes_L0 = process_graphs(L0_matrices)
@@ -58,8 +62,8 @@ def plot_histograms(mpd_L0, mpd_L1, size_L0, size_L1):
     plt.subplot(1, 2, 1)
     plt.hist(mpd_L0, bins=100, alpha=0.7, label='L (alpha=0)')
     plt.hist(mpd_L1, bins=100, alpha=0.7, label='L1 (alpha=1)')
-    plt.title('Mean Pairwise Distance')
-    plt.xlabel('MPD')
+    plt.title('Spetral gap')
+    plt.xlabel('sg')
     plt.ylabel('Frequency')
     plt.legend()
 
@@ -81,7 +85,7 @@ def plot_histograms(mpd_L0, mpd_L1, size_L0, size_L1):
 # ===========================
 
 dataset = QM9(root='data/QM9')
-dataset = dataset[:10000]
+dataset = dataset[:1000]
 
 adjacency_matrices = []
 

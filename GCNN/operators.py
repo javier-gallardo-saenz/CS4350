@@ -41,6 +41,15 @@ def batched_adv_diff(A: torch.Tensor,
 #---------------NOT BATCHED ----------------
 ############################################
 
+def normalized_adjacency(A):
+    deg = A.sum(dim=1)                 # [N]
+    D_neg_alpha = torch.diag(deg.pow(-0.5))
+
+    return D_neg_alpha @ A @ D_neg_alpha
+
+def normalized_laplacian(A):
+    return torch.eye(A.shape[0]) - normalized_adjacency(A)
+
 def hub_laplacian(A: torch.Tensor, alpha: float) -> torch.Tensor:
     """
     Unbatched hub Laplacian for one graph.
