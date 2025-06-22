@@ -1,0 +1,5 @@
+diff_operators = ['Hub_Laplacian', 'Hub_Advection_Diffusion', 'Hub_Laplacian',
+                      'Hub_Advection_Diffusion', 'Laplacian']
+learn_diffs = [True, True, False, False, False]
+
+with the F matrix built from the Hub_Laplacian with alpha=0.5 and the diffusion paramters all initially set to 0.5

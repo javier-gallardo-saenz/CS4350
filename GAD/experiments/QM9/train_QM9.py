@@ -51,13 +51,6 @@ def train_QM9(model, optimizer, train_loader, val_loader, prop_idx, factor, devi
         epoch_val_MAEs.append(combined_val_mae)   # Store combined val MAE
         # individual_epoch_val_MAEs_history.append(individual_val_maes_tensor.cpu()) # Store individual val MAEs if needed later
 
-        alpha_value_layer0 = model.layers[0].alpha.item()
-        gamma_adv_value_layer0 = model.layers[0].gamma_adv.item()
-        gamma_diff_value_layer0 = model.layers[0].gamma_diff.item()
-        print(f"Epoch {epoch + 1}: Alpha Parameter Value (Layer 0): {alpha_value_layer0:.4f}")
-        print(f"Epoch {epoch + 1}: Gamma_adv Parameter Value (Layer 0): {gamma_adv_value_layer0:.4f}")
-        print(f"Epoch {epoch + 1}: Gamma_diff Parameter Value (Layer 0): {gamma_diff_value_layer0:.4f}")
-
         # Learning Rate Scheduler Step (uses its own patience)
         scheduler.step(combined_val_mae)
 
