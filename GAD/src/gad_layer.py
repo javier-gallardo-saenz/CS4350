@@ -38,13 +38,13 @@ class GAD_layer(nn.Module):
                                                                     device=device,
                                                                     alpha_0=diffusion_param['alpha'],
                                                                     gamma_diff_0=diffusion_param['gamma_diff'],
-                                                                    gamma_adv_0=diffusion_param['gamma_adv_0'])
+                                                                    gamma_adv_0=diffusion_param['gamma_adv'])
             elif diffusion_type == "learnable_degree_operators":
                 self.diffusion_layer = Diffusion_layer_LearnableDegOperators(aux_hid_dim, method=diffusion_method, k=k,
                                                                              device=device,
                                                                              alpha_0=diffusion_param['alpha'],
                                                                              gamma_diff_0=diffusion_param['gamma_diff'],
-                                                                             gamma_adv_0=diffusion_param['gamma_adv_0'])
+                                                                             gamma_adv_0=diffusion_param['gamma_adv'])
 
             self.MLP_last = MLP([2*aux_hid_dim, aux_hid_dim], dropout=False)
             

@@ -138,42 +138,57 @@ class Diffusion_layer_DegOperators(nn.Module):
         num_params = len(sig.parameters)
 
         if num_params == 1:
-            # If the operator takes one argument, it must be alpha
-            mat_ = operator(self.alpha)
+            L_star = operator(self.alpha)
         elif num_params == 3:
-            # If the operator takes three arguments, they must be gamma_adv, gamma_diff, alpha
-            mat_ = operator(self.gamma_adv, self.gamma_diff, self.alpha)
+            L_star = operator(self.gamma_adv, self.gamma_diff, self.alpha)
         else:
             raise ValueError(
                 "The operator function must take either 1 argument (alpha) or "
                 "3 arguments (gamma_adv, gamma_diff, alpha).")
 
-        # Construct the matrix A = (I - dt * L)
-        # mat_ is L, self.diffusion_time is dt
-        # Identity matrix: (num_nodes, num_nodes)
-        identity_matrix = torch.eye(num_nodes, device=self.device)
+        node_deg_vec_1d = node_deg_vec.squeeze(-1)
 
-        # Scale mat_ by diffusion_time
-        scaled_L = self.diffusion_time * mat_
+        # L_star is now (num_nodes, num_nodes)
 
-        # A = (I + dt * L)
-        A = identity_matrix + scaled_L  # (num_nodes, num_nodes)
+        # --- Step 2: Compute D_inv (inverse of degree matrix) ---
+        # node_deg_vec_1d is a 1D tensor (num_nodes,) with degrees >= 1.
+        node_deg_inv_vec = 1.0 / node_deg_vec_1d  # Element-wise inverse, no need for epsilon given >=1 constraint
+        D_inv = torch.diag_embed(node_deg_inv_vec)  # Create diagonal matrix from inverse degrees
+        # D_inv is (num_nodes, num_nodes)
 
-        # Reshape node_fts from (B, N, W) to (B * W, N, 1) or (B * W, N)
-        # Reshape A from (N, N) to (B * W, N, N) (by expanding)
+        # --- Step 3: Compute D_inv @ L_star ---
+        # Expand D_inv and L_star for `self.width` (features/channels)
+        # D_inv is typically considered universal across features, so we expand it.
+        D_inv_expanded = D_inv.unsqueeze(0).expand(self.width, num_nodes, num_nodes)  # (W, N, N)
+        L_star_expanded = L_star.unsqueeze(0).expand(self.width, num_nodes, num_nodes)  # (W, N, N)
 
-        A_expanded_for_features = A.unsqueeze(0).expand(self.width, -1, -1)  # (width, num_nodes, num_nodes)
-        A_final = A_expanded_for_features.unsqueeze(0).expand(batch_idx.max() + 1, -1, -1, -1).reshape(-1, num_nodes,
-                                                                                                       num_nodes)
-                                                                                                         # (B*W, N, N)
-        # Right-hand side: node_fts (B, N, W) -> (B * W, N, 1)
-        rhs = node_fts.permute(0, 2, 1).reshape(-1, num_nodes, 1)  # (B*W, N, 1)
+        # Perform batch matrix multiplication for D_inv @ L_star
+        D_inv_L_star = torch.bmm(D_inv_expanded, L_star_expanded)  # (self.width, num_nodes, num_nodes)
 
-        Solved_x = torch.linalg.solve(A_final, rhs)  # (B*W, N, 1)
-        # Reshape back to (B, N, W)
-        x_diffuse = Solved_x.squeeze(-1).reshape(batch_idx.max() + 1, self.width, num_nodes).permute(0, 2, 1)
+        # --- Step 4: Scale by self.diffusion_time (dt * D_inv @ L_star) ---
+        dt_D_inv_L_star = D_inv_L_star * self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
+        # dt_D_inv_L_star is (self.width, num_nodes, num_nodes)
 
-        x_diffuse = self.relu(x_diffuse)
+        # --- Step 5: Construct the matrix A = (I - dt * D_inv @ L_star) ---
+        # Create a 2D identity matrix of size (num_nodes, num_nodes)
+        identity_2d = torch.eye(num_nodes, dtype=L_star.dtype, device=L_star.device)
+
+        # Expand the 2D identity matrix to match the first dimension (width)
+        identity_matrix_expanded = identity_2d.unsqueeze(0).expand(self.width, num_nodes, num_nodes)
+        # identity_matrix_expanded is (self.width, num_nodes, num_nodes)
+
+        # A is (I - dt * D_inv @ L_star)
+        A = identity_matrix_expanded - dt_D_inv_L_star
+        # A is (self.width, num_nodes, num_nodes)
+
+        # --- Step 6: Solve the linear system ---
+        node_fts_for_solve = node_fts.transpose(0, 1).unsqueeze(-1)
+        Solved_x = torch.linalg.solve(A, node_fts_for_solve)
+
+        # --- Step 9: Reshape back and apply ReLU ---
+        x_diffuse_squeezed = Solved_x.squeeze(-1)  # (self.width, num_nodes)
+        # Transpose to get (num_nodes, self.width)
+        x_diffuse = self.relu(x_diffuse_squeezed.transpose(0, 1))
 
         return x_diffuse
 
@@ -206,37 +221,64 @@ class Diffusion_layer_LearnableDegOperators(nn.Module):
         nn.init.constant_(self.alpha, alpha_0)
 
     def forward(self, node_fts, node_deg_vec, node_deg_mat, operator, k_eig_val, k_eig_vec, num_nodes, batch_idx):
+        with torch.no_grad():
+
+            self.diffusion_time.data = torch.clamp(self.diffusion_time, min=1e-8)
+
         sig = inspect.signature(operator)
         num_params = len(sig.parameters)
 
         if num_params == 1:
-            # If the operator takes one argument, it must be alpha
-            mat_ = operator(self.alpha)
+            L_star = operator(self.alpha)
         elif num_params == 3:
-            # If the operator takes three arguments, they must be gamma_adv, gamma_diff, alpha
-            mat_ = operator(self.gamma_adv, self.gamma_diff, self.alpha)
+            L_star = operator(self.gamma_adv, self.gamma_diff, self.alpha)
         else:
             raise ValueError(
-                "The operator function must take either 1 argument (alpha) or"
-                " 3 arguments (gamma_adv, gamma_diff, alpha).")
+                "The operator function must take either 1 argument (alpha) or "
+                "3 arguments (gamma_adv, gamma_diff, alpha).")
 
-        with torch.no_grad():
-            self.diffusion_time.data = torch.clamp(self.diffusion_time, min=1e-8)
+        node_deg_vec_1d = node_deg_vec.squeeze(-1)
 
-        mat_ = mat_.unsqueeze(0).expand(self.width, num_nodes, num_nodes).clone()
+        # L_star is now (num_nodes, num_nodes)
 
-        mat_ *= self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
+        # --- Step 2: Compute D_inv (inverse of degree matrix) ---
+        # node_deg_vec_1d is a 1D tensor (num_nodes,) with degrees >= 1.
+        node_deg_inv_vec = 1.0 / node_deg_vec_1d # Element-wise inverse, no need for epsilon given >=1 constraint
+        D_inv = torch.diag_embed(node_deg_inv_vec)  # Create diagonal matrix from inverse degrees
+        # D_inv is (num_nodes, num_nodes)
 
-        cholesky_factors = torch.linalg.cholesky(mat_)
+        # --- Step 3: Compute D_inv @ L_star ---
+        # Expand D_inv and L_star for `self.width` (features/channels)
+        # D_inv is typically considered universal across features, so we expand it.
+        D_inv_expanded = D_inv.unsqueeze(0).expand(self.width, num_nodes, num_nodes)  # (W, N, N)
+        L_star_expanded = L_star.unsqueeze(0).expand(self.width, num_nodes, num_nodes)  # (W, N, N)
 
-        cholesky_decomp = node_fts * node_deg_vec
+        # Perform batch matrix multiplication for D_inv @ L_star
+        D_inv_L_star = torch.bmm(D_inv_expanded, L_star_expanded)  # (self.width, num_nodes, num_nodes)
 
-        cholesky_decomp_T = torch.transpose(cholesky_decomp, 0, 1).unsqueeze(-1)
+        # --- Step 4: Scale by self.diffusion_time (dt * D_inv @ L_star) ---
+        dt_D_inv_L_star = D_inv_L_star * self.diffusion_time.unsqueeze(-1).unsqueeze(-1)
+        # dt_D_inv_L_star is (self.width, num_nodes, num_nodes)
 
-        final_sol = torch.cholesky_solve(cholesky_decomp_T, cholesky_factors)
+        # --- Step 5: Construct the matrix A = (I - dt * D_inv @ L_star) ---
+        # Create a 2D identity matrix of size (num_nodes, num_nodes)
+        identity_2d = torch.eye(num_nodes, dtype=L_star.dtype, device=L_star.device)
 
-        x_diffuse = torch.transpose(final_sol.squeeze(-1), 0, 1)
+        # Expand the 2D identity matrix to match the first dimension (width)
+        identity_matrix_expanded = identity_2d.unsqueeze(0).expand(self.width, num_nodes, num_nodes)
+        # identity_matrix_expanded is (self.width, num_nodes, num_nodes)
 
-        x_diffuse = self.relu(x_diffuse)
+        # A is (I - dt * D_inv @ L_star)
+        A = identity_matrix_expanded - dt_D_inv_L_star
+        # A is (self.width, num_nodes, num_nodes)
+
+        # --- Step 6: Solve the linear system ---
+        node_fts_for_solve = node_fts.transpose(0, 1).unsqueeze(-1)
+        Solved_x = torch.linalg.solve(A, node_fts_for_solve)
+
+        # --- Step 9: Reshape back and apply ReLU ---
+        x_diffuse_squeezed = Solved_x.squeeze(-1)  # (self.width, num_nodes)
+        # Transpose to get (num_nodes, self.width)
+        x_diffuse = self.relu(x_diffuse_squeezed.transpose(0, 1))
 
         return x_diffuse

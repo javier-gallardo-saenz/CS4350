@@ -21,8 +21,7 @@ from utils.operator_preparation import get_operator_and_params
 
 
 #PARAMETERS FOR THE DATASET EVALUATION
-N = 20000 #number of graphs to evaluate
-k = 25 #number of eigenvectors
+N = 1000 #number of graphs to evaluate
 gamma_adv = 1
 gamma_diff = 1
 operators = ['Laplacian', 'Hub_Laplacian', 'Hub_Laplacian', 'Hub_Laplacian', 'Hub_Laplacian',
@@ -58,7 +57,8 @@ num_operators = len(operators)
 num_graphs = len(dataset)
 
 # Outer list: per graph. Inner list: per operator.
-# Example: all_F_matrices_per_graph[graph_idx][operator_idx]
+# all_F_matrices_per_graph[graph_idx][operator_idx] will have (num_nodes, num_nodes) shape
+# all_eig_vals_per_graph[graph_idx][operator_idx] will have (num_nodes,) shape
 all_F_matrices_per_graph: List[List[torch.Tensor]] = [[] for _ in range(num_graphs)]
 all_eig_vals_per_graph: List[List[torch.Tensor]] = [[] for _ in range(num_graphs)]
 
@@ -74,35 +74,44 @@ all_sum_abs_gaps_per_operator: List[List[float]] = [[] for _ in range(num_operat
 
 print("\n--- Processing all graphs for all operators (single pass) ---")
 for graph_idx, g in enumerate(tqdm(dataset, desc="Processing graphs")):
+    # Determine the number of eigenvalues/eigenvectors for the current graph dynamically
+    current_k_for_graph = g.num_nodes
+
     # Process each operator for the current graph
     for op_idx in range(num_operators):
         op_name = operators[op_idx]
-        alpha_val = alpha[op_idx]
+        alpha_val = alpha[op_idx]  # alpha is still fixed per operator type
 
+        # Pass the dynamic k_for_graph (g.num_nodes) to the operator function resolver
         operator_fn, params = get_operator_and_params(op_name, alpha_val, gamma_adv, gamma_diff)
 
         processed_graph_dict, F_dense_matrix, eigenvalues = process_single_graph_for_dataset_evaluation(
-            g, k, operator_fn, **params
+            g, current_k_for_graph, operator_fn, **params
         )
 
         # Store results for the current graph and operator
+        # eigenvalues tensor will now have g.num_nodes elements
         all_F_matrices_per_graph[graph_idx].append(F_dense_matrix)
         all_eig_vals_per_graph[graph_idx].append(eigenvalues)
 
         # Collect eigenvalue metrics for the current graph and operator
-        if eigenvalues.numel() > 0:
+        # The number of actual eigenvalues is simply the length of the tensor
+        num_actual_eig_vals = eigenvalues.numel()
+
+        if num_actual_eig_vals > 0:
             # Lambda min is the first eigenvalue
             all_lambda_min_per_operator[op_idx].append(eigenvalues[0].item())
-            # Lambda max is the last eigenvalue among the first k (or fewer if graph is small)
-            all_lambda_max_per_operator[op_idx].append(eigenvalues[min(k - 1, eigenvalues.numel() - 1)].item())
+            # Lambda max is the last eigenvalue
+            all_lambda_max_per_operator[op_idx].append(eigenvalues[-1].item())
         else:
             all_lambda_min_per_operator[op_idx].append(np.nan)
             all_lambda_max_per_operator[op_idx].append(np.nan)
 
-        if eigenvalues.numel() > 1:
+        if num_actual_eig_vals > 1:
             # Calculate sum of absolute differences between consecutive eigenvalues
-            eig_vals_diffs = torch.diff(eigenvalues[:k])
-            sum_abs_gaps = torch.sum(torch.abs(eig_vals_diffs)).item()
+            # No slicing needed as `eigenvalues` already contains only the actual values
+            eig_vals_diffs_meaningful = torch.diff(eigenvalues)
+            sum_abs_gaps = torch.sum(torch.abs(eig_vals_diffs_meaningful)).item()
             all_sum_abs_gaps_per_operator[op_idx].append(sum_abs_gaps)
         else:
             all_sum_abs_gaps_per_operator[op_idx].append(np.nan)  # No gaps to compute
@@ -156,10 +165,8 @@ for pair_key, data in average_cosine_similarities_agg.items():
         print(
             f"  Avg Similarity between {op1_name} (alpha={op1_alpha}) and {op2_name} (alpha={op2_alpha}): No valid similarities to compute (zero vectors or no data)")
 
-# b) Eigenvalue differences for each operator (original part, slightly modified to use k)
+# b) Average Eigenvalue Differences for each operator (now fully dynamic and correctly averaged)
 print("\n--- Average Eigenvalue Differences ---")
-# This section remains largely the same as it correctly calculates average differences
-# for gaps, but now we're also adding spectral range and sum of abs gaps.
 
 # Now, process and print the average differences for each operator
 for op_idx in range(num_operators):
@@ -167,22 +174,36 @@ for op_idx in range(num_operators):
     op_alpha = alpha[op_idx]
     print(f"\nOperator: {op_name} (alpha={op_alpha})")
 
-    current_op_all_graph_diffs = [torch.diff(all_eig_vals_per_graph[graph_idx][op_idx][:k]).cpu().numpy()
-                                  for graph_idx in range(num_graphs)
-                                  if all_eig_vals_per_graph[graph_idx][
-                                      op_idx].numel() > 1]  # Ensure at least 2 eigenvalues for diff
+    current_op_all_graph_diffs = []
+    for graph_idx in range(num_graphs):
+        eig_vals = all_eig_vals_per_graph[graph_idx][op_idx]
+
+        # num_actual_eig_vals is simply the size of the returned tensor
+        num_actual_eig_vals = eig_vals.numel()
+
+        if num_actual_eig_vals > 1:
+            # Compute differences over all actual eigenvalues for this graph
+            eig_vals_diffs = torch.diff(eig_vals).cpu().numpy()
+            current_op_all_graph_diffs.append(eig_vals_diffs)
+        # If not enough actual eigenvalues, we don't append anything,
+        # which correctly excludes this graph from the average for this operator's gaps.
 
     if current_op_all_graph_diffs:
+        # Determine the maximum length of differences array across graphs for padding
+        # This will be the largest number of gaps observed in any graph for this operator
         max_len = max((len(d) for d in current_op_all_graph_diffs), default=0)
 
         if max_len > 0:
+            # Pad shorter arrays with NaN to enable stacking and `nanmean`
             padded_diffs = [np.pad(d, (0, max_len - len(d)), 'constant', constant_values=np.nan) for d in
                             current_op_all_graph_diffs]
 
             stacked_diffs = np.array(padded_diffs)
+
+            # Calculate average differences across all graphs, ignoring NaNs from padding
             mean_diffs = np.nanmean(stacked_diffs, axis=0)
 
-            print(f"  Average eigenvalue differences for first {k - 1} gaps across graphs:")
+            print(f"  Average eigenvalue differences for first {max_len} gaps across graphs:")
             for diff_idx, avg_diff in enumerate(mean_diffs):
                 print(f"    Gap {diff_idx + 1} (λ_{diff_idx + 2} - λ_{diff_idx + 1}): {avg_diff:.6f}")
         else:
@@ -190,13 +211,14 @@ for op_idx in range(num_operators):
     else:
         print("  No eigenvalue differences were collected for this operator (no graphs with enough eigenvalues).")
 
-# c) New Metrics: Average Spectral Range and Average Sum of Absolute Gaps
+# c) New Metrics: Average Spectral Range and Average Sum of Absolute Gaps (now fully dynamic)
 print("\n--- Additional Eigenvalue Metrics ---")
 for op_idx in range(num_operators):
     op_name = operators[op_idx]
     op_alpha = alpha[op_idx]
     print(f"\nOperator: {op_name} (alpha={op_alpha})")
 
+    # np.nanmean will correctly average only the non-NaN values
     avg_lambda_min = np.nanmean(all_lambda_min_per_operator[op_idx])
     avg_lambda_max = np.nanmean(all_lambda_max_per_operator[op_idx])
     avg_sum_abs_gaps = np.nanmean(all_sum_abs_gaps_per_operator[op_idx])
@@ -210,7 +232,7 @@ for op_idx in range(num_operators):
         print("  Spectral range could not be computed (not enough valid λ_min/λ_max values).")
 
     if not np.isnan(avg_sum_abs_gaps):
-        print(f"  Average Sum of Absolute Gaps (over first {k - 1} gaps): {avg_sum_abs_gaps:.6f}")
+        print(f"  Average Sum of Absolute Gaps (over relevant gaps): {avg_sum_abs_gaps:.6f}")
     else:
         print("  Average sum of absolute gaps could not be computed (not enough valid gap values).")
 

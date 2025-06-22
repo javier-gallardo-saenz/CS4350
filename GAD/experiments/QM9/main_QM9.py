@@ -122,9 +122,14 @@ def main():
 
     print("data preprocessing: calculate and store the vector field F, etc.")
 
-    for i, alpha in enumerate([-0.5, 0.0, 0.5]):
+    diff_operators = ['Hub_Laplacian', 'Hub_Advection_Diffusion', 'Hub_Laplacian',
+                      'Hub_Advection_Diffusion', 'Laplacian']
+    learn_diffs = [True, True, False, False, False]
+
+
+    for i in range(len(diff_operators)):
         
-        operator, params = get_operator_and_params(args.operator, alpha, args.gamma_adv, args.gamma_diff)
+        operator, params = get_operator_and_params(args.operator, args.alpha, args.gamma_adv, args.gamma_diff)
     
         D, avg_d = average_node_degree(dataset_train)
         dataset_train = preprocessing_dataset(dataset_train, args.k, operator, **params)
@@ -142,7 +147,13 @@ def main():
                                  num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
     
     
-        diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
+        # diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
+        #                                                                             args.diff_alpha,
+        #                                                                             args.diff_gamma_adv,
+        #                                                                             args.diff_gamma_diff)
+
+        diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(diff_operators[i],
+                                                                                    learn_diffs[i],
                                                                                     args.diff_alpha,
                                                                                     args.diff_gamma_adv,
                                                                                     args.diff_gamma_diff)
