@@ -1,0 +1,1 @@
+Learnable diff with Hub Adv Diff and F from Hub Laplacian with alpha=0.5

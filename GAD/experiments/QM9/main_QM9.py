@@ -122,12 +122,10 @@ def main():
 
     print("data preprocessing: calculate and store the vector field F, etc.")
 
-    diff_operators = ['Hub_Laplacian', 'Hub_Advection_Diffusion', 'Hub_Laplacian',
-                      'Hub_Advection_Diffusion', 'Laplacian']
-    learn_diffs = [True, True, False, False, False]
+    aggregators = [['mean', 'sum', 'max', 'dir_der'], ['mean', 'sum', 'max']]
 
 
-    for i in range(len(diff_operators)):
+    for i in range(len(aggregators)):
         
         operator, params = get_operator_and_params(args.operator, args.alpha, args.gamma_adv, args.gamma_diff)
     
@@ -147,23 +145,31 @@ def main():
                                  num_workers=os.cpu_count() // 2, pin_memory=True, persistent_workers=True)
     
     
-        # diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator, args.learn_diff,
-        #                                                                             args.diff_alpha,
-        #                                                                             args.diff_gamma_adv,
-        #                                                                             args.diff_gamma_diff)
-
-        diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(diff_operators[i],
-                                                                                    learn_diffs[i],
+        diff_operator, diff_type, diff_parameters = get_diff_operator_and_diff_type(args.diffusion_operator,
+                                                                                    args.learn_diff,
                                                                                     args.diff_alpha,
                                                                                     args.diff_gamma_adv,
                                                                                     args.diff_gamma_diff)
+
     
         print("create GAD model")
         
+        # model = GAD(num_of_node_fts=11, num_of_edge_fts=4, hid_dim=args.hid_dim, atomic_emb=args.atomic_emb,
+        #             graph_norm=args.use_graph_norm, batch_norm=args.use_batch_norm, dropout=args.dropout,
+        #             readout=args.readout, aggregators=args.aggregators, scalers=args.scalers, edge_fts=args.use_edge_fts,
+        #             avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
+        #             use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
+        #             diffusion_type=diff_type,
+        #             diffusion_param=diff_parameters,
+        #             k=args.k, n_layers=args.n_layers,
+        #             output_size=len(args.prop_idx))
+
         model = GAD(num_of_node_fts=11, num_of_edge_fts=4, hid_dim=args.hid_dim, atomic_emb=args.atomic_emb,
                     graph_norm=args.use_graph_norm, batch_norm=args.use_batch_norm, dropout=args.dropout,
-                    readout=args.readout, aggregators=args.aggregators, scalers=args.scalers, edge_fts=args.use_edge_fts,
-                    avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net, residual=args.use_residual,
+                    readout=args.readout, aggregators=aggregators[i], scalers=args.scalers,
+                    edge_fts=args.use_edge_fts,
+                    avg_d=avg_d, D=D, device=device, towers=args.towers, type_net=args.type_net,
+                    residual=args.use_residual,
                     use_diffusion=args.use_diffusion, diffusion_method=args.diffusion_method,
                     diffusion_type=diff_type,
                     diffusion_param=diff_parameters,

@@ -3,6 +3,9 @@ import torch.nn as nn
 from torch_geometric.utils import add_self_loops
 from torch_geometric.nn import MessagePassing
 
+from torch_geometric.utils import to_dense_adj
+from hub_utils.hub_operators import hub_laplacian_dense_pytorch, get_hub_laplacian_dense_pytorch
+
 
 ## mean aggregator
 
@@ -165,9 +168,8 @@ class aggregate_dir_der(MessagePassing):
 
         self.output_dim = hid_dim
         self.linear = nn.Linear(self.input_dim, self.output_dim).to(self.device)
-        
+
     def forward(self, node_fts, edge_fts, edge_index, F_norm_edge, F_dig):
-        
         edge_index, _ = add_self_loops(edge_index, num_nodes= node_fts.size(0))
         edge_index = edge_index.to(self.device)
 
@@ -179,7 +181,7 @@ class aggregate_dir_der(MessagePassing):
             return self.propagate(edge_index, x=node_fts, edge_attr=edge_fts, norm= (F_norm_edge, F_dig))
 
     def message(self, x_i, x_j, edge_attr, norm):
-        
+
         norm_1, norm_2 = norm
         norm_3 = torch.cat([norm_1, -norm_2], dim = 0)
         message_1 = abs(norm_3.view(-1, 1) * x_j)
@@ -188,7 +190,7 @@ class aggregate_dir_der(MessagePassing):
             out = torch.cat([x_i, message_1, message_2], dim = 1)
         else:
             out = torch.cat([x_i, message_1], dim = 1)
- 
+
         return self.linear(out)
- 
+
 AGGREGATORS = {'mean': aggregate_mean, 'sum': aggregate_sum, 'max': aggregate_max, 'min': aggregate_min, 'dir_der':aggregate_dir_der, 'dir_smooth':aggregate_dir_smooth}
