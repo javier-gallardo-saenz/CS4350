@@ -1,7 +1,7 @@
 # main.py
 import torch
 from torch.nn import ReLU
-from operators import hub_laplacian, adv_diff
+from operators import hub_laplacian, turbohub_laplacian
 from gcnn_train import run_experiment  # this should return model, histories, etc.
 import itertools
 import os
@@ -14,31 +14,29 @@ import csv
 # -----------------------
 DEFAULT_PARAMS = {
     "N": 1200,
-    "targets": [0, 1, 2],
+    "targets": [0],
     "batch_size": 64,
     "lr": 1e-4,
     "alpha_lr": 1e-2,
     "weight_decay": 1e-5,
     "alpha": 0.5,
-    "num_epochs": 250,
+    "num_epochs": 300,
     "dims": [11, 64, 64],
     "hops": 2,
     "act_fn": ReLU(),
     "readout_hidden_dims": [64, 32],
-    "pooling": "sum",
+    "pooling": "mean",
     "apply_readout": True,
-    "learn_alpha": False,
-    "gso_generator": hub_laplacian,
+    "learn_alpha": True,
+    "gso_generator": turbohub_laplacian,
     "use_bn": True,
     "dropout_p": 0.2,
     "patience": 50
 }
 
 GRID_PARAMS = {
-    "targets": [[0],[1],[2]],
-    "learn_alpha": [True],
-    "alpha": [0],
-    "pooling": ["sum", "max", "mean"]
+    "learn_alpha": [False, True],
+    "alpha" : [-0.5, 0 ,0.5, 1]
 }
 
 # Build the grid
@@ -48,7 +46,7 @@ grid = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
 # -----------------------
 # 2. Prepare Result Paths
 # -----------------------
-TOP_RESULTS_DIR = "GCNN/results_single_alpha0"
+TOP_RESULTS_DIR = "GCNN/results_turbo"
 os.makedirs(TOP_RESULTS_DIR, exist_ok=True)
 
 SUMMARY_CSV = os.path.join(TOP_RESULTS_DIR, "summary.csv")
