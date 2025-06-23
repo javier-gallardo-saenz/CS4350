@@ -24,3 +24,11 @@ To run the modified GAD model:
 
 1. Go to `GAD/experiments/QM9/`.
 2. Refer to the `README.md` file within this directory for detailed instructions and ready-to-use sample commands.
+
+---
+
+## 📚 Appendix: Additional Ablation Study
+
+Due to space constraints in the main report, we performed an additional ablation study whose results could not be included. These results can be found in the following file:
+
+`GAD/experiments/QM9/saved_models/prop0_ablation_study/results.txt`
