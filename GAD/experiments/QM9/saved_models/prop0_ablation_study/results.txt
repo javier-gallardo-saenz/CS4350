@@ -1,0 +1,33 @@
+This ablation study considered the following hyperparameter choices and trained on a random subset of QM9:
+hid_dims = [50, 50, 25]
+n_layers = [6, 3, 6]
+
+The results were the following:
+
+-> Full model:
+    --- Final MAEs---
+    Train MAE: 0.6304
+    Val MAE:   0.5708
+    Test MAE:  0.8069
+
+
+-> Model with only 3 layers:
+    --- Final MAEs---
+    Train MAE: 0.4446
+    Val MAE:   0.5989
+    Test MAE:  0.7514
+
+
+-> Model with only size 25 embedding:
+    --- Final MAEs---
+    Train MAE: 0.6395
+    Val MAE:   0.6318
+    Test MAE:  0.8421
+
+
+Due to time constraints, the results were obtained in only one random subset of QM9 and therefore might not be completely
+representative. However, it is interesting to note that decreasing the number of layers did not undermine the performance
+of the model, which suggests that 3 layers might be enough to ensure communication between the atoms whose relation
+determines the first property of the QM9 dataset.
+
+Meanwhile, decreasing the embedding size is clearly detrimental.

@@ -1,0 +1,7 @@
+.idea
+.vscode
+GCNN/__pycache__
+data/
+GCNN/results/.~lock.summary.csv#
+GCNN/results_single/.~lock.summary.csv#
+experiments/GCNN_nodepred/__pycache__
