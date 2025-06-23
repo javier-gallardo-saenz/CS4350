@@ -25,6 +25,11 @@ To run the modified GAD model:
 1. Go to `GAD/experiments/QM9/`.
 2. Refer to the `README.md` file within this directory for detailed instructions and ready-to-use sample commands.
 
+### 3. Dataset spectral analysis + F matrices cosine similarity
+To run the spectral analysis of the dataset (or a subset of it) and obtain the cosine similarity between the different F matrices corresponding to each Hub Operator:
+1. Go to `GAD/experiments/QM9/`.
+2. Modify the hyperparameters in `dataset/evaluation.py` and run. 
+
 ---
 
 ## 📚 Appendix: Additional Ablation Study
