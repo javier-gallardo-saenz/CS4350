@@ -56,21 +56,30 @@ Here we include the scripts to generate our results on QM9 dataset, including up
     --diff_gamma_diff=0.5
     ```
 
--> Number of eigenvectors to be used in spectral scheme:
+-> Number of eigenvectors to be used in spectral scheme:  
     ````
     --k=10
     ````
+    We do not use the spectral scheme in our experiments to reduce as much as possible the eigenvalue computation.
 
 
-***Example Run Command***:
+
+***Example Run Command for single parameter optimization***:
+```
+python -m main_QM9 --n_layers=6 --hid_dim=50 --atomic_emb=25 --dropout=0 --readout=mean --use_diffusion=True --diffusion_method=implicit --k=25 --aggregators mean sum max dir_der --scalers identity amplification attenuation --use_edge_fts=True --use_graph_norm=True --use_batch_norm=True --use_residual=True --type_net=simple --prop_idx 0 --factor 1 --num_epochs=200 --batch_size=48 --lr=1e-3 --weight_decay=3e-6 --min_lr=1e-5 --patience=25 --operator=Hub_Laplacian  --alpha=0.5 --gamma_diff=0 --gamma_adv=0 --diffusion_operator=Laplacian --learn_diff=False --diff_alpha=0 --diff_gamma_adv=0 --diff_gamma_diff=0 --model_name=saved_models\model
+```
+
+
+***Example Run Command for multiparameter optimization***:
 
 ```
-python -m main_QM9 --n_layers=6 --hid_dim=50 --atomic_emb=25 --dropout=0 --readout=mean --use_diffusion=True --diffusion_method=implicit --k=25 --aggregators mean sum max dir_der --scalers identity amplification attenuation --use_edge_fts=True --use_graph_norm=True --use_batch_norm=True --use_residual=True --type_net=simple --towers=5 --prop_idx 0 1 2 --factor 1 1 10 --num_epochs=200 --batch_size=48 --lr=1e-3 --weight_decay=3e-6 --min_lr=1e-5 --patience=25 --operator=Hub_Laplacian  --alpha=0.5 --gamma_diff=0 --gamma_adv=0 --diffusion_operator=Laplacian --learn_diff=False --diff_alpha=0 --diff_gamma_adv=0 --diff_gamma_diff=0 --model_name=saved_models\model
+python -m main_QM9 --n_layers=6 --hid_dim=50 --atomic_emb=25 --dropout=0 --readout=mean --use_diffusion=True --diffusion_method=implicit --k=25 --aggregators mean sum max dir_der --scalers identity amplification attenuation --use_edge_fts=True --use_graph_norm=True --use_batch_norm=True --use_residual=True --type_net=simple --prop_idx 0 1 2 --factor 1 1 10 --num_epochs=200 --batch_size=48 --lr=1e-3 --weight_decay=3e-6 --min_lr=1e-5 --patience=25 --operator=Hub_Laplacian  --alpha=0.5 --gamma_diff=0 --gamma_adv=0 --diffusion_operator=Laplacian --learn_diff=False --diff_alpha=0 --diff_gamma_adv=0 --diff_gamma_diff=0 --model_name=saved_models\model
 ```
 
 
 
-***OLD INITIALIZATION***
+
+***ORIGINAL GAD MODEL INITIALIZATION***
 
 ***To run GAD model on QM9 properties***:
 
